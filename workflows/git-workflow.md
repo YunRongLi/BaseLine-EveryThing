@@ -16,3 +16,6 @@ Types:
   * fix: fix bug
   * update: refactor existing code
 
+## Staging Rules
+- Do not add `.agent` or any hidden folders starting with `.` (e.g., `.folder/`) to the repository. These should remain local or be managed via `.gitignore`.
+
