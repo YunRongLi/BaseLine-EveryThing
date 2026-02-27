@@ -13,3 +13,11 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Local AI Agent Configs
+.agent/
+.agents/
+.claude/
+.copilot/
+.github/skills/
+.gemini/
+
