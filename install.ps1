@@ -1,16 +1,40 @@
+<#
+.SYNOPSIS
+    Installs AI Agent rules, skills, and workflows.
+
+.DESCRIPTION
+    Copies the rules, skills, and workflows from the current project structure into
+    the target directory corresponding to the specified AI Agent and Scope.
+
+.PARAMETER Agent
+    Which agent format to target: antigravity (default), copilot, or claude.
+
+.PARAMETER Scope
+    Installation scope: global (default) or workspace.
+
+.PARAMETER Rules
+    An array of rule names to install. Defaults to 'all'. Select specific rules by name.
+
+.EXAMPLE
+    .\install.ps1 -Agent antigravity -Scope workspace
+    Installs for Antigravity in the local workspace (.agents folder).
+#>
+[CmdletBinding()]
 param (
     [ValidateSet("antigravity", "copilot", "claude")]
     [string]$Agent = "antigravity",
     
     [ValidateSet("global", "workspace")]
-    [string]$Scope = "global"
+    [string]$Scope = "global",
+    
+    [string[]]$Rules = @("all")
 )
 
 # Define Base Directories based on Agent and Scope
 if ($Scope -eq "workspace") {
     switch ($Agent) {
         "antigravity" {
-            $BaseDir = ".agent"
+            $BaseDir = ".agents"
             $TargetRules = Join-Path $BaseDir "rules"
             $TargetSkills = Join-Path $BaseDir "skills"
         }
@@ -29,9 +53,8 @@ if ($Scope -eq "workspace") {
 } else {
     switch ($Agent) {
         "antigravity" {
-            $BaseDir = Join-Path $HOME ".gemini"
-            $TargetRules = $BaseDir  # Global rules in ~/.gemini/GEMINI.md
-            $TargetSkills = Join-Path $BaseDir "antigravity\skills"
+            Write-Error "Global installation is not supported for antigravity. Please use workspace scope."
+            exit 1
         }
         "copilot" {
             $BaseDir = Join-Path $HOME ".copilot"
@@ -57,37 +80,20 @@ if (-not (Test-Path $TargetSkills)) {
 
 # Install Rules
 if (Test-Path "rules") {
-    if ($Agent -eq "antigravity" -and $Scope -eq "global") {
-        # Antigravity Global: GEMINI.md goes to ~/.gemini/, others to ~/.gemini/rules/
-        Write-Host "[Packaging] Installing Antigravity global rules..." -ForegroundColor Yellow
-        if (Test-Path "rules\GEMINI.md") {
-            Copy-Item -Path "rules\GEMINI.md" -Destination $TargetRules -Force
-            Write-Host "[OK] GEMINI.md installed to $TargetRules" -ForegroundColor Green
-        }
-        
-        $SecondaryRules = Join-Path $TargetRules "rules"
-        if (-not (Test-Path $SecondaryRules)) {
-            New-Item -ItemType Directory -Path $SecondaryRules -Force | Out-Null
-        }
-        
-        # Copy everything EXCEPT GEMINI.md to the 'rules' subfolder
-        Get-ChildItem -Path "rules\*" -Exclude "GEMINI.md" | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $SecondaryRules -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Write-Host "[OK] Secondary rules installed to $SecondaryRules" -ForegroundColor Green
-    } else {
-        # For other agents or workspace scope, copy everything except GEMINI.md (unless it's antigravity workspace)
-        $ExcludeList = @()
-        if ($Agent -ne "antigravity") {
-            $ExcludeList += "GEMINI.md"
-        }
-        
-        Write-Host "[Packaging] Copying rules from .\rules to $TargetRules..." -ForegroundColor Yellow
-        Get-ChildItem -Path "rules\*" -Exclude $ExcludeList | ForEach-Object {
-            Copy-Item -Path $_.FullName -Destination $TargetRules -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Write-Host "[OK] Rules installed." -ForegroundColor Green
+    # For other agents or workspace scope, copy everything except GEMINI.md (unless it's antigravity workspace)
+    $ExcludeList = @()
+    if ($Agent -ne "antigravity") {
+        $ExcludeList += "GEMINI.md"
     }
+    
+    Write-Host "[Packaging] Copying rules from .\rules to $TargetRules..." -ForegroundColor Yellow
+    Get-ChildItem -Path "rules" -Filter "*.md" -Recurse -File | Where-Object { 
+        ($ExcludeList -notcontains $_.Name) -and 
+        ($Rules -contains "all" -or $Rules -contains $_.BaseName -or $Rules -contains $_.Name) 
+    } | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination $TargetRules -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "[OK] Rules installed." -ForegroundColor Green
 } else {
     Write-Host "[Warning] No .\rules directory found." -ForegroundColor DarkYellow
 }

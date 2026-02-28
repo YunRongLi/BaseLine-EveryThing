@@ -2,19 +2,35 @@
 
 AGENT="antigravity"
 SCOPE="global"
+RULES="all"
 
 # Parse arguments
 for arg in "$@"; do
     case $arg in
         antigravity|copilot|claude) AGENT="$arg" ;;
         global|workspace) SCOPE="$arg" ;;
+        --rule=*|--rules=*) RULES="${arg#*=}" ;;
+        -h|--help)
+            echo "Usage: ./install.sh [AGENT] [SCOPE] [OPTIONS]"
+            echo ""
+            echo "Installs AI Agent rules, skills, and workflows from the current directory."
+            echo ""
+            echo "Arguments:"
+            echo "  AGENT             Which agent format to target: antigravity (default), copilot, or claude."
+            echo "  SCOPE             Installation scope: global (default) or workspace."
+            echo ""
+            echo "Options:"
+            echo "  --rules=<rules>   Comma-separated list of rule names to install. Defaults to 'all'."
+            echo "  -h, --help        Show this help message and exit."
+            exit 0
+            ;;
     esac
 done
 
 if [ "$SCOPE" = "workspace" ]; then
     case $AGENT in
         antigravity)
-            BASE_DIR=".agent"
+            BASE_DIR=".agents"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             ;;
@@ -33,9 +49,8 @@ if [ "$SCOPE" = "workspace" ]; then
 else
     case $AGENT in
         antigravity)
-            BASE_DIR="$HOME/.gemini"
-            TARGET_RULES="$BASE_DIR"
-            TARGET_SKILLS="$BASE_DIR/antigravity/skills"
+            echo "[Error] Global installation is not supported for antigravity. Please use workspace scope." >&2
+            exit 1
             ;;
         copilot)
             BASE_DIR="$HOME/.copilot"
@@ -57,30 +72,37 @@ mkdir -p "$TARGET_SKILLS"
 
 # Install Rules
 if [ -d "rules" ]; then
-    if [ "$AGENT" = "antigravity" ] && [ "$SCOPE" = "global" ]; then
-        echo "[Packaging] Installing Antigravity global rules..."
-        if [ -f "rules/GEMINI.md" ]; then
-            cp "rules/GEMINI.md" "$TARGET_RULES/"
-            echo "[OK] GEMINI.md installed to $TARGET_RULES"
+    echo "[Packaging] Copying rules from ./rules to $TARGET_RULES..."
+    
+    # Helper to check if rule should be copied
+    should_copy_rule() {
+        local file_name="${1##*/}"
+        local base_name="${file_name%.*}"
+        
+        if [ "$AGENT" != "antigravity" ] && [ "$file_name" = "GEMINI.md" ]; then
+            return 1
         fi
-
-        SECONDARY_RULES="$TARGET_RULES/rules"
-        mkdir -p "$SECONDARY_RULES"
-
-        # Copy everything EXCEPT GEMINI.md to the 'rules' subfolder
-        # Use find to list files and filter out GEMINI.md
-        find rules -maxdepth 1 -mindepth 1 ! -name "GEMINI.md" -exec cp -r {} "$SECONDARY_RULES/" \; 2>/dev/null || true
-        echo "[OK] Secondary rules installed to $SECONDARY_RULES"
-    else
-        echo "[Packaging] Copying rules from ./rules to $TARGET_RULES..."
-        if [ "$AGENT" != "antigravity" ]; then
-            # Copy everything except GEMINI.md
-            find rules -maxdepth 1 -mindepth 1 ! -name "GEMINI.md" -exec cp -r {} "$TARGET_RULES/" \; 2>/dev/null || true
-        else
-            cp -r rules/* "$TARGET_RULES/" 2>/dev/null || true
+        
+        if [ "$RULES" = "all" ]; then
+            return 0
         fi
-        echo "[OK] Rules installed."
-    fi
+        
+        IFS=','
+        for r in $RULES; do
+            if [ "$r" = "$file_name" ] || [ "$r" = "$base_name" ]; then
+                return 0
+            fi
+        done
+        return 1
+    }
+
+    find rules -type f -name "*.md" | while read -r rule_file; do
+        if should_copy_rule "$rule_file"; then
+            cp "$rule_file" "$TARGET_RULES/" 2>/dev/null || true
+        fi
+    done
+    
+    echo "[OK] Rules installed."
 else
     echo "[Warning] No ./rules directory found."
 fi
