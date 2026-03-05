@@ -5,11 +5,14 @@ SCOPE="global"
 RULES="all"
 
 # Parse arguments
-for arg in "$@"; do
-    case $arg in
-        antigravity|copilot|claude) AGENT="$arg" ;;
-        global|workspace) SCOPE="$arg" ;;
-        --rule=*|--rules=*) RULES="${arg#*=}" ;;
+while [ $# -gt 0 ]; do
+    case $1 in
+        antigravity|copilot|claude) AGENT="$1" ;;
+        global|workspace) SCOPE="$1" ;;
+        --rule=*|--rules=*) RULES="${1#*=}" ;;
+        --rule|--rules) RULES="$2"; shift ;;
+        --path=*) TARGET_PATH="${1#*=}" ;;
+        --path) TARGET_PATH="$2"; shift ;;
         -h|--help)
             echo "Usage: ./install.sh [AGENT] [SCOPE] [OPTIONS]"
             echo ""
@@ -21,26 +24,35 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --rules=<rules>   Comma-separated list of rule names to install. Defaults to 'all'."
+            echo "  --path=<path>     Specific location to install into when SCOPE is workspace."
             echo "  -h, --help        Show this help message and exit."
             exit 0
             ;;
     esac
+    shift
 done
 
 if [ "$SCOPE" = "workspace" ]; then
+    if [ -n "$TARGET_PATH" ]; then
+        # Ensure TARGET_PATH does not end with /
+        PREFIX="${TARGET_PATH%/}/"
+    else
+        PREFIX=""
+    fi
+
     case $AGENT in
         antigravity)
-            BASE_DIR=".agents"
+            BASE_DIR="${PREFIX}.agents"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             ;;
         copilot)
-            BASE_DIR=".github"
+            BASE_DIR="${PREFIX}.github"
             TARGET_RULES="$BASE_DIR"
             TARGET_SKILLS="$BASE_DIR/skills"
             ;;
         claude)
-            BASE_DIR=".claude"
+            BASE_DIR="${PREFIX}.claude"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             ;;
