@@ -5,7 +5,7 @@ A centralized repository for managing rules, skills, and workflows across multip
 ## Features
 
 - **Multi-Agent Support**: Unified configuration for Antigravity, GitHub Copilot, and Claude Code.
-- **Rules Management**: Centralized storage for architectural standards and coding guidelines.
+- **Rules Management**: Centralized storage for architectural standards, coding guidelines, and document conventions (e.g., Obsidian).
 - **Workflow Automation**: Standardized processes for common tasks like git operations.
 - **Cross-Platform Installers**: Robust installation scripts for both Windows (PowerShell) and Linux/macOS (Bash).
 
@@ -15,8 +15,9 @@ A centralized repository for managing rules, skills, and workflows across multip
 .
 ├── rules/              # Global and project-specific rules
 │   ├── GEMINI.md       # Global Antigravity overrides
+│   ├── document/       # Documentation standards (Obsidian, etc.)
 │   └── engineer/       # Technical guidelines (Architectural, C++, etc.)
-├── skills/             # Custom agent skills (Antigravity/Copilot/Claude)
+├── skills/             # Custom agent skills (External capabilities)
 ├── workflows/          # Standardized operational workflows (e.g., git)
 ├── install.ps1         # Windows installer
 └── install.sh          # Linux/macOS installer
@@ -26,20 +27,20 @@ A centralized repository for managing rules, skills, and workflows across multip
 
 ### PowerShell (Windows)
 ```powershell
-# Default: Antigravity in Global scope
-.\install.ps1
+# Antigravity (Workspace only)
+.\install.ps1 -Agent antigravity -Scope workspace
 
-# Specific Agent & Scope
-.\install.ps1 -Agent copilot -Scope workspace
+# Copilot (Global)
+.\install.ps1 -Agent copilot -Scope global
 ```
 
 ### Bash (Linux/macOS)
 ```bash
-# Default: Antigravity in Global scope
-./install.sh
+# Antigravity (Workspace only)
+./install.sh antigravity workspace
 
-# Specific Agent & Scope
-./install.sh claude workspace
+# Claude (Global)
+./install.sh claude global
 ```
 
 ## Workflows
@@ -51,4 +52,4 @@ This repository follows a specific git commit format as defined in `workflows/gi
 - `update`: Refactor or existing code updates
 
 ## License
-MIT (or your preferred license)
+MIT
