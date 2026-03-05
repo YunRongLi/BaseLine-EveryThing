@@ -15,9 +15,16 @@
 .PARAMETER Rules
     An array of rule names to install. Defaults to 'all'. Select specific rules by name.
 
+.PARAMETER Path
+    Specific location to install into when Scope is workspace.
+
 .EXAMPLE
     .\install.ps1 -Agent antigravity -Scope workspace
     Installs for Antigravity in the local workspace (.agents folder).
+
+.EXAMPLE
+    .\install.ps1 -Agent antigravity -Scope workspace -Path "C:\MyProject"
+    Installs for Antigravity in the specified workspace path (C:\MyProject\.agents folder).
 #>
 [CmdletBinding()]
 param (
@@ -27,24 +34,26 @@ param (
     [ValidateSet("global", "workspace")]
     [string]$Scope = "global",
     
-    [string[]]$Rules = @("all")
+    [string[]]$Rules = @("all"),
+    
+    [string]$Path = ""
 )
 
 # Define Base Directories based on Agent and Scope
 if ($Scope -eq "workspace") {
     switch ($Agent) {
         "antigravity" {
-            $BaseDir = ".agents"
+            $BaseDir = if ([string]::IsNullOrWhiteSpace($Path)) { ".agents" } else { Join-Path $Path ".agents" }
             $TargetRules = Join-Path $BaseDir "rules"
             $TargetSkills = Join-Path $BaseDir "skills"
         }
         "copilot" {
-            $BaseDir = ".github"
+            $BaseDir = if ([string]::IsNullOrWhiteSpace($Path)) { ".github" } else { Join-Path $Path ".github" }
             $TargetRules = $BaseDir  # Copilot instructions usually go in .github/
             $TargetSkills = Join-Path $BaseDir "skills"
         }
         "claude" {
-            $BaseDir = ".claude"
+            $BaseDir = if ([string]::IsNullOrWhiteSpace($Path)) { ".claude" } else { Join-Path $Path ".claude" }
             $TargetRules = Join-Path $BaseDir "rules"
             $TargetSkills = Join-Path $BaseDir "skills"
         }
