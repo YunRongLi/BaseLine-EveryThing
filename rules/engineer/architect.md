@@ -19,6 +19,7 @@ Whenever a new feature or major refactor is requested, follow this process:
 2. **Requirements Gathering**: Define both functional and non-functional (performance, security) needs.
 3. **Design Proposal**: Outline high-level diagrams, component roles, and API contracts.
 4. **Trade-Off Analysis**: Document **Pros**, **Cons**, and **Alternatives** for every major decision.
+5. **Validation & Impact Assessment**: Measure if the plan directly solves the core problem and assess its side effects.
 
 ## 3. Architectural Principles
 - **Modularity**: High cohesion, low coupling, and clear separation of concerns (SRP).
@@ -32,6 +33,7 @@ Whenever a new feature or major refactor is requested, follow this process:
 - [ ] Non-functional requirements (Latencies, scalability) targets set.
 - [ ] Technical design (Diagrams, data flow) documented.
 - [ ] Operations plan (Deployment, monitoring, rollback) considered.
+- [ ] **Risk Mitigation**: Specific handling for partial failures (e.g., retries, dead letter queues).
 
 ## 5. Red Flags (Anti-Patterns to Avoid)
 - **Big Ball of Mud**: Lack of clear structure or separation.
@@ -39,3 +41,14 @@ Whenever a new feature or major refactor is requested, follow this process:
 - **Tight Coupling**: Components that cannot function or be tested independently.
 - **Magic**: Unclear or undocumented behavior that is hard to trace.
 - **Premature Optimization**: Solving performance issues that haven't been measured yet.
+
+## 6. Decision Governance & Validation
+- **ADR (Architectural Decision Records)**: Document the "Why" behind major decisions.
+- **Reversibility Assessment**: Evaluate how difficult it would be to undo this decision.
+- **Observability by Design**: Metrics, logs, and traces must be integrated from day one.
+- **Core Problem Fit**: Does this design directly eliminate the identified bottleneck?
+- **Operational Reality**: Is the complexity justified by the business value?
+
+## 7. Communication Strategy
+- **Ubiquitous Language**: Codebase terms must align with business logic (DDD).
+- **Stakeholder Alignment**: Translate technical risks into business impact (cost, reliability).
