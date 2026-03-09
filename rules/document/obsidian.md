@@ -94,14 +94,37 @@ Bases are used for structured database-like views of vault data.
 - Embed a base in a note: `![[Database.base]]`
 - Embed a specific view: `![[Database.base#View Name]]`
 
-## 4. Vault Organization and Naming
+## 4. Vault Organization (PARA Framework)
 
-- File names should be descriptive and unique.
-- Avoid special characters in filenames that are not OS-safe.
-- Folder structure should follow a logical hierarchy (e.g., Projects, Resources, Archive).
-- Use tags for cross-cutting concerns (e.g., #urgent, #review-needed).
+- Organize the vault based on **Actionability** using the PARA system:
+  - **Projects**: Active tasks with a fixed deadline and specific outcome. (Highest actionability)
+  - **Areas**: Ongoing responsibilities that require a continuous standard of performance.
+  - **Resources**: Topics of interest, research, or utilities. (Baseline for long-term knowledge)
+  - **Archives**: Completed projects or inactive areas/resources.
+- **Flat Folder Structure**: Avoid deep folder hierarchies. Use folders primarily for top-level PARA categories.
+- **Naming**: File names must be descriptive and unique. Avoid OS-unsafe special characters.
+- **Tagging**: Use tags for cross-cutting concerns (e.g., status, priority, specific attributes) rather than as primary organizational categories.
 
-## 5. Validation Checklist
+## 6. Map of Content (MOC) Strategy
+
+MOCs provide flexible, non-linear structure and context to notes, complementing the PARA folder system.
+
+### 6.1. Types of MOCs
+- **Subject MOC**: Maps out a specific Area or Resource. It serves as an entry point to a cluster of related notes.
+- **Project MOC**: Acts as a "thinking workspace" or "workbench" to assemble ideas, research materials, and drafts for a specific project goal.
+- **Fleeting MOC**: A temporary staging area for new information to be triaged and linked into the PARA structure.
+
+### 6.2. Knowledge Synthesis Principles
+- **Action over Collection**: Prioritize "thinking" over "collecting." Avoid becoming a "librarian" of unused information.
+- **Opinion Notes**: MOCs should include personal insights, summaries, and viewpoints to synthesize information into knowledge.
+- **Topic Deconstruction**: Break broad, overwhelming topics into specific sub-MOCs or "Favorite Questions" (Feynman's approach) to maintain focus.
+- **Bottom-up Growth**: Let MOCs evolve organically as note density increases, rather than forcing a top-down structure prematurely.
+
+### 6.3. System Dynamics
+- **Dynamic Movement**: Knowledge should flow between PARA categories. A Resource may mature into an Area, or spark a new Project.
+- **Incubation and沉澱 (Sedimentation)**: Use the MOC workspace to incubate ideas during projects, and sediment the refined knowledge back into Areas or Resources upon completion.
+
+## 7. Validation Checklist
 
 Before finalizing a document, ensure:
 1. Properties (YAML) are valid and complete.
@@ -110,4 +133,5 @@ Before finalizing a document, ensure:
 4. Base YAML schema is correct.
 5. No icons or emojis are used in the document structure as per project rules.
 6. Bit/byte explanations are formatted correctly in Markdown tables for clarity.
+7. Vault organization follows the PARA framework and MOC synthesis principles.
 
