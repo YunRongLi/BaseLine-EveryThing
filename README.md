@@ -16,7 +16,7 @@ A centralized repository for managing rules, skills, and workflows across multip
 ├── rules/              # Global and project-specific rules
 │   ├── GEMINI.md       # Global Antigravity overrides
 │   ├── document/       # Documentation standards (Obsidian, etc.)
-│   └── engineer/       # Technical guidelines (Architectural, C++, etc.)
+│   └── engineer/       # Technical guidelines (Architectural, C++, C, etc.)
 ├── skills/             # Custom agent skills (External capabilities)
 ├── workflows/          # Standardized operational workflows (e.g., git)
 ├── install.ps1         # Windows installer
