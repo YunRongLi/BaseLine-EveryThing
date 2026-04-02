@@ -52,6 +52,7 @@ Derived from the official [ISO C++ Core Guidelines](https://isocpp.github.io/Cpp
 - **Per.7: Design to enable optimization.**
 - **CP.2: Avoid data races.**
 - **CP.20: Use RAII for locking (e.g., `std::lock_guard`, `std::unique_lock`).**
+- **CP.21: Capture by value in asynchronous callbacks.** Avoid capturing variables by reference (e.g., `[&]`, `[&var]`) in lambdas passed to async functions (like `async_method_call`). References may become dangling if the calling object's lifetime ends before the callback fires. Use capture by value (e.g., `[var]` or `[self = shared_from_this()]`) to ensure safety.
 
 ## 8. Error Handling
 - **E.2: Throw an exception to signal that a function can't perform its assigned task.**
