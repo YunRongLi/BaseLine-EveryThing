@@ -32,6 +32,7 @@ Derived from the official [ISO C++ Core Guidelines](https://isocpp.github.io/Cpp
 - **C.35: A base class destructor should be either public and virtual, or protected and non-virtual.**
 - **C.41: A constructor should create a fully initialized object.**
 - **C.45: Don't define a default constructor that only initializes data members; use default member initializers instead.**
+- **C.47: Define and initialize member variables in the order of member declaration.**
 - **C.128: Virtual functions should specify exactly one of `virtual`, `override`, or `final`.**
 
 ## 5. Resource Management (RAII)
@@ -52,7 +53,7 @@ Derived from the official [ISO C++ Core Guidelines](https://isocpp.github.io/Cpp
 - **Per.7: Design to enable optimization.**
 - **CP.2: Avoid data races.**
 - **CP.20: Use RAII for locking (e.g., `std::lock_guard`, `std::unique_lock`).**
-- **CP.21: Capture by value in asynchronous callbacks.** Avoid capturing variables by reference (e.g., `[&]`, `[&var]`) in lambdas passed to async functions (like `async_method_call`). References may become dangling if the calling object's lifetime ends before the callback fires. Use capture by value (e.g., `[var]` or `[self = shared_from_this()]`) to ensure safety.
+- **CP.21: Capture by value in asynchronous callbacks.** Avoid capturing variables by reference (e.g., `[&]`, `[&var]`) in lambdas passed to async functions. Also, **never capture `this` as a raw pointer** (e.g., `[this]`). References and `this` may become dangling if the calling object's lifetime ends before the callback fires. Always use `weak_from_this()` or `shared_from_this()` (e.g., `[weakSelf = weak_from_this()]` or `[self = shared_from_this()]`) to ensure memory safety.
 
 ## 8. Error Handling
 - **E.2: Throw an exception to signal that a function can't perform its assigned task.**
@@ -69,5 +70,3 @@ Derived from the official [ISO C++ Core Guidelines](https://isocpp.github.io/Cpp
 - **SL.con.1: Prefer using `std::array` or `std::vector` instead of a C array.**
 - **SL.str.1: Use `std::string` to own character sequences; use `std::string_view` to refer to them.**
 
-## 11. Coding Style (Project Specific)
-- **Use Allman style for opening braces.** The opening brace `{` must be on a new line and aligned with the start of the control statement (if, for, switch, etc.) or function signature.
