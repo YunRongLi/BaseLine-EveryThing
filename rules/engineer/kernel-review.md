@@ -3,7 +3,7 @@ trigger: manual
 ---
 
 # Code Formatting and Style
-* Kernel code must use tabs for indentation (8-wide). Mixed tabs/spaces, trailing whitespace, or leading spaces before tabs are strictly prohibited.
+* Kernel code must use tabs for indentation (8-wide). Mixed tabs/spaces, trailing whitespace, or leading spaces before tabs are strictly prohibited. Maintain consistent indentation in macro definitions using tabs.
 * The preferred limit on the length of a single line is 80 columns, but do not break user-visible strings (like printk messages) as it breaks grep.
 * Structs, if, switch, for, while, do must use K&R style braces (opening brace on the same line, closing brace on its own line). Functions are the exception: opening brace goes on the beginning of the next line.
 * Use a space after most keywords (if, switch, case, for, do, while). Do not use spaces around sizeof, typeof, alignof, or __attribute__.
@@ -35,6 +35,7 @@ trigger: manual
 * Avoid macros that affect control flow or depend on magic local variables.
 * Enclose expressions in parenthesis when defining constants using macros.
 * Prefer `IS_ENABLED(CONFIG_SOMETHING)` in normal C conditionals over `#ifdef` in `.c` files wherever possible.
+* Avoid duplicate macro definitions for shared register addresses; use descriptive, shared names.
 
 # Concurrency and State
 * State variables accessed or modified across different execution contexts (e.g., IRQ vs. process/softirq) must use `atomic_t` or proper locking to prevent data races.
@@ -55,6 +56,7 @@ trigger: manual
 * Do not use `$(wildcard ...)` in Kbuild Makefiles; source files must be listed explicitly.
 * Custom Device Tree compatible strings must include a valid vendor prefix.
 * In DT schema bindings composing schemas with `allOf`, use `unevaluatedProperties: false` rather than `additionalProperties: false`.
+* Fields parsed from Device Tree (e.g., `label`, `status`) must be actively utilized in the driver logic (e.g., for attribute visibility or descriptive names).
 
 # Miscellaneous
 * Copyright headers must NOT contain "Confidential" or "All rights reserved".
