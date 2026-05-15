@@ -20,6 +20,7 @@ This file is used to overwrite or extend global agent rules.
 
 ## Workflows
 - **Git Workflow:** Use `./workflows/git-workflow.md`
+- **Obsidian Workflow:** Use `./workflows/obsidian-workflow.md`
 
 ## Overrides
 - **No Icons**: Do not use any icons or emojis (e.g., ✅, ⚠️, 🚀, 🏗️) in generated code, documentation, or responses. Use plain text only.
