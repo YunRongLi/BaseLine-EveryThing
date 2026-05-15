@@ -61,8 +61,9 @@ if [ "$SCOPE" = "workspace" ]; then
 else
     case $AGENT in
         antigravity)
-            echo "[Error] Global installation is not supported for antigravity. Please use workspace scope." >&2
-            exit 1
+            BASE_DIR="$HOME/.antigravity"
+            TARGET_RULES="$BASE_DIR/rules"
+            TARGET_SKILLS="$BASE_DIR/skills"
             ;;
         copilot)
             BASE_DIR="$HOME/.copilot"

@@ -62,8 +62,9 @@ if ($Scope -eq "workspace") {
 } else {
     switch ($Agent) {
         "antigravity" {
-            Write-Error "Global installation is not supported for antigravity. Please use workspace scope."
-            exit 1
+            $BaseDir = Join-Path $HOME ".antigravity"
+            $TargetRules = Join-Path $BaseDir "rules"
+            $TargetSkills = Join-Path $BaseDir "skills"
         }
         "copilot" {
             $BaseDir = Join-Path $HOME ".copilot"
