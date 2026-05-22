@@ -32,25 +32,26 @@ Apply this skill whenever the user requests or the task naturally fits one of th
 4. The script will output the port it chose (e.g., `Server started at http://localhost:43218`). Provide the user with the localhost URL (e.g., `http://localhost:<port>/filename.html`) so they can access it via their browser. Do not output the entire HTML code in your chat response.
 
 ## 4. Special Commands
-### `create-task`
-When the user explicitly issues the `create-task` command:
-1. Generate a simple HTML text editor tailored for scoping and describing a new task.
-2. The editor must include a text area (or structured inputs) for the user to describe the work contents of the task.
-3. The editor must include a "Send to Agent" button. This button should use `fetch()` to send a `POST` request to `/save-task` on the local HTML server, saving the user's input as a markdown file (e.g., `task_request.md`) in the current directory.
-4. The web page should display a success dialog instructing the user to return to the chat and simply type `Done`.
-5. Start the HTML server as usual and provide the user with the localhost URL.
-6. Once the user replies `Done` in the chat, read the saved markdown file, generate a more detailed task plan using a new HTML artifact, and save it to the same directory. Let the user know the plan has been generated and they can refresh their browser to view it.
+### `/task-create`
+When the user explicitly issues the `/task-create` command:
+1. Generate an interactive HTML discussion interface tailored for scoping the new task.
+2. The interface must allow the user to provide high-level thoughts, descriptions, and metadata.
+3. Start the local HTML server and provide the user with the localhost URL so they can access it in their browser.
 
-### `/cancel-task`
-When the user explicitly issues the `/cancel-task` command:
-1. Use the `send_command_input` tool with `Terminate: true` to stop the currently running background HTML server.
-2. Optionally delete the temporary scratch files related to the task creation (e.g., `task_editor.html`, `task_request.md`).
-3. Confirm to the user that the task workflow has been cancelled.
+### `/task-spec`
+When the user explicitly issues the `/task-spec` command:
+1. Based on the initial task discussion, design an interactive specification UI.
+2. The UI must clearly map out the operating environment, feature requirements, acceptance criteria (conditions), and necessary tools.
+3. Enable interactive fields or forms where the specification can be refined, edited, or expanded directly in the browser.
 
-### `/finish-task`
-When the user explicitly issues the `/finish-task` command:
-1. Instruct the user to ensure their final design is exported/saved (if applicable) using the HTML UI.
-2. Read the final exported design file (e.g. from the scratch directory) and permanently save it to the appropriate project directory (like `test_spec/`, `docs/`, etc.) as a standard Markdown file.
-3. Use the `send_command_input` tool to stop the running HTML server.
-4. Clean up the temporary HTML editor files from the scratch directory.
-5. Provide a confirmation to the user linking to the finalized, permanently saved file in their workspace.
+### `/task-prototype`
+When the user explicitly issues the `/task-prototype` command:
+1. Construct an interactive prototype or visual representation of the proposed solution based on the defined spec.
+2. Implement mock workflows, interactive wireframes, layouts, or simulated logic so the user can visualize and interact with the main features.
+3. Keep the prototype highly interactive to encourage hands-on exploration.
+
+### `/task-review`
+When the user explicitly issues the `/task-review` command:
+1. Capture any inputs, edits, or feedback submitted by the user through the interactive elements of the HTML UI.
+2. Seamlessly update the corresponding spec or prototype files to reflect the feedback.
+3. Present the updated version or a clear revision comparison to the user, allowing continuous iterative review.

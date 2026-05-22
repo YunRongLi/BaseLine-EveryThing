@@ -69,4 +69,3 @@ Derived from the official [ISO C++ Core Guidelines](https://isocpp.github.io/Cpp
 - **SL.1: Use libraries wherever possible.** Don't reinvent the wheel.
 - **SL.con.1: Prefer using `std::array` or `std::vector` instead of a C array.**
 - **SL.str.1: Use `std::string` to own character sequences; use `std::string_view` to refer to them.**
-

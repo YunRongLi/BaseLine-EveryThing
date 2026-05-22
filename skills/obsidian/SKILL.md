@@ -134,4 +134,3 @@ Before finalizing a document, ensure:
 5. No icons or emojis are used in the document structure as per project rules.
 6. Bit/byte explanations are formatted correctly in Markdown tables for clarity.
 7. Vault organization follows the PARA framework and MOC synthesis principles.
-

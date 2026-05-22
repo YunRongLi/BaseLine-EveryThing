@@ -13,11 +13,17 @@ A centralized repository for managing rules, skills, and workflows across multip
 
 ```text
 .
-├── rules/              # Global and project-specific rules
-│   ├── GEMINI.md       # Global Antigravity overrides
-│   ├── document/       # Documentation standards (Obsidian, etc.)
-│   └── engineer/       # Technical guidelines (Architectural, C++, C, etc.)
-├── skills/             # Custom agent skills (External capabilities)
+├── rules/              # Global rule configurations
+│   └── GEMINI.md       # Global Antigravity overrides
+├── skills/             # Structured guidelines and custom agent skills
+│   ├── architect/      # Software architecture specialist
+│   ├── bmc-architect/  # BMC system and firmware architecture
+│   ├── c-programming-guideline/
+│   ├── cpp-core-guideline/
+│   ├── html-effectiveness/
+│   ├── kernel-review/
+│   ├── Marathon/
+│   └── obsidian/       # Document and vault standards
 ├── workflows/          # Standardized operational workflows (e.g., git)
 ├── install.ps1         # Windows installer
 └── install.sh          # Linux/macOS installer

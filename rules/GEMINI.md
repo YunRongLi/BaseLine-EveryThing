@@ -8,19 +8,24 @@ This file is used to overwrite or extend global agent rules.
 
 ## Loaded Rules
 ### Engineering Standards
-- **General Architecture:** Use `./rules/engineer/architect.md`
-- **BMC Architecture:** Use `./rules/engineer/bmc-architect.md`
-- **C++ Standards:** Use `./rules/engineer/cpp-core-guideline.md`
-- **C Standards:** Use `./rules/engineer/c-programming-guideline.md`
-- **Kernel Review:** Use `./rules/engineer/kernel-review.md`
+- **General Architecture:** Use `./skills/architect/SKILL.md`
+- **BMC Architecture:** Use `./skills/bmc-architect/SKILL.md`
+- **C++ Standards:** Use `./skills/cpp-core-guideline/SKILL.md`
+- **C Standards:** Use `./skills/c-programming-guideline/SKILL.md`
+- **Kernel Review:** Use `./skills/kernel-review/SKILL.md`
+- **HTML Effectiveness:** Use `./skills/html-effectiveness/SKILL.md`
 
 ### Documentation & Personal
-- **Obsidian Guide:** Use `./rules/document/obsidian.md`
-- **Marathon Training:** Use `./rules/Exercise/Marathon.md`
+- **Obsidian Guide:** Use `./skills/obsidian/SKILL.md`
+- **Marathon Training:** Use `./skills/Marathon/SKILL.md`
 
 ## Workflows
 - **Git Workflow:** Use `./workflows/git-workflow.md`
 - **Obsidian Workflow:** Use `./workflows/obsidian-workflow.md`
+- **Task Create Workflow:** Use `./workflows/task-create.md`
+- **Task Spec Workflow:** Use `./workflows/task-spec.md`
+- **Task Prototype Workflow:** Use `./workflows/task-prototype.md`
+- **Task Review Workflow:** Use `./workflows/task-review.md`
 
 ## Overrides
 - **No Icons**: Do not use any icons or emojis (e.g., ✅, ⚠️, 🚀, 🏗️) in generated code, documentation, or responses. Use plain text only.
