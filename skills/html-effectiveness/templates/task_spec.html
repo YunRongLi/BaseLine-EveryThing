@@ -639,9 +639,12 @@
                 <!-- Dynmic card list container -->
                 <div id="specCardsContainer"></div>
 
-                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem;">
                     <button type="button" class="btn btn-secondary" id="btn-copy-spec" onclick="copySpecMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopySpec">Copy Spec as Markdown</button>
                     <button type="button" class="btn btn-secondary" id="btn-export-spec" onclick="exportSpecMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportSpec">Export Spec as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-export-json" onclick="exportStateJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportJSON">Export State as JSON</button>
+                    <button type="button" class="btn btn-secondary" id="btn-import-json" onclick="triggerImportJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnImportJSON">Import State from JSON</button>
+                    <input type="file" id="import-json-file" accept=".json" onchange="handleImportJSON(event)" style="display: none;">
                 </div>
             </div>
 
@@ -751,7 +754,9 @@
                 consoleTitle: 'System Console & AI Output',
                 processing: 'Processing...',
                 consoleReady: 'Ready. Waiting for user interaction...',
-                copied: 'Copied'
+                copied: 'Copied',
+                btnExportJSON: 'Export State as JSON',
+                btnImportJSON: 'Import State from JSON'
             },
             zh: {
                 brandSpan: '工作流',
@@ -789,7 +794,9 @@
                 consoleTitle: '系統終端與 AI 輸出',
                 processing: '處理中...',
                 consoleReady: '就緒。等待使用者操作...',
-                copied: '已複製'
+                copied: '已複製',
+                btnExportJSON: '匯出完整狀態 (JSON 格式)',
+                btnImportJSON: '匯入狀態 (JSON 格式)'
             }
         };
 
@@ -1177,6 +1184,87 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        async function exportStateJSON() {
+            try {
+                const sections = gatherSpecData();
+                const stateRes = await fetch('/api/state');
+                const data = await stateRes.json();
+                if (data.status === 'success') {
+                    const state = data.state;
+                    state.spec_data.sections = sections;
+                    
+                    const title = state.create_data && state.create_data.title ? state.create_data.title : 'Task';
+                    const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
+                    const filename = `${safeTitle}_workflow_state.json`;
+                    
+                    const blob = new Blob([JSON.stringify({ state }, null, 2)], { type: 'application/json;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    logDebug("SUCCESS: Exported active state as JSON.");
+                } else {
+                    logDebug("ERROR: Could not fetch active state for export.");
+                }
+            } catch (err) {
+                logDebug("ERROR: Export JSON failed. " + err.message);
+            }
+        }
+
+        function triggerImportJSON() {
+            const fileInput = document.getElementById('import-json-file');
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.click();
+            }
+        }
+
+        function handleImportJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const importData = JSON.parse(e.target.result);
+                    if (!importData || !importData.state) {
+                        throw new Error("Invalid format. Missing 'state' object.");
+                    }
+                    
+                    logDebug("Importing state from JSON...");
+                    const res = await fetch('/api/state/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(importData)
+                    });
+                    const result = await res.json();
+                    if (result.status === 'success') {
+                        logDebug("SUCCESS: State imported. Reloading page...");
+                        setTimeout(() => {
+                            const newStage = importData.state.current_stage || 'spec';
+                            if (newStage === 'prototype') {
+                                window.location.href = '/prototype';
+                            } else if (newStage === 'create' || newStage === 'completed') {
+                                window.location.href = '/create';
+                            } else {
+                                window.location.reload();
+                            }
+                        }, 1000);
+                    } else {
+                        logDebug("ERROR: " + (result.message || "Failed to import state."));
+                    }
+                } catch (err) {
+                    logDebug("ERROR: Failed to parse or import JSON. " + err.message);
+                }
+            };
+            reader.readAsText(file);
         }
     </script>
 </body>

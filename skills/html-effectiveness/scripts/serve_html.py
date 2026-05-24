@@ -568,6 +568,31 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'status': 'success', 'message': 'Workflow state reset.'}).encode('utf-8'))
             return
             
+        elif self.path == '/api/state/import':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                state_data = payload.get('state', {})
+                if state_data:
+                    for k in WORKFLOW_STATE.keys():
+                        if k in state_data:
+                            WORKFLOW_STATE[k] = state_data[k]
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({'status': 'success', 'message': 'State imported successfully.'}).encode('utf-8'))
+                else:
+                    raise ValueError("No state data found in payload.")
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+            return
+            
         elif self.path == '/api/agent':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
