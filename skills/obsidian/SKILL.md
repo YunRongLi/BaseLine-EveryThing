@@ -32,11 +32,21 @@ All notes should begin with a YAML frontmatter block containing essential metada
 - tags: list of tags
 - aliases: list of alternative names
 - status: [draft, active, archived]
+- type: [thing, statement, question, quote, person, moc, journal]
 
-### 1.4. Callouts
+Each note type should include specific additional properties as guidelines:
+- person: company, role
+- statement: origin, related-claims
+- moc: topic, status-notes
+
+### 1.4. Callouts and AI-Agent Output Rules
 Use callouts for structured information. Format: `> [!type] Title`
 - Standard types: note, abstract, info, todo, tip, success, question, warning, failure, danger, bug, example, quote.
 - Use `> [!type]-` for collapsed callouts by default.
+- **AI Agent Automation Formatting**: When the AI agent processes meeting notes, inbox triage, or summaries:
+  - Important risks and critical caveats must be formatted inside `> [!warning]` or `> [!danger]` blocks.
+  - Action items and next steps must be formatted inside `> [!todo]` blocks.
+  - Actionable tasks must be output as interactive checkboxes `- [ ]` for dynamic user tracking.
 
 ### 1.5. Special Formatting
 - Highlights: `==highlighted text==`
@@ -94,43 +104,75 @@ Bases are used for structured database-like views of vault data.
 - Embed a base in a note: `![[Database.base]]`
 - Embed a specific view: `![[Database.base#View Name]]`
 
-## 4. Vault Organization (PARA Framework)
+## 4. Vault Organization (ACE Folder Framework)
 
-- Organize the vault based on **Actionability** using the PARA system:
-  - **Projects**: Active tasks with a fixed deadline and specific outcome. (Highest actionability)
-  - **Areas**: Ongoing responsibilities that require a continuous standard of performance.
-  - **Resources**: Topics of interest, research, or utilities. (Baseline for long-term knowledge)
-  - **Archives**: Completed projects or inactive areas/resources.
-- **Flat Folder Structure**: Avoid deep folder hierarchies. Use folders primarily for top-level PARA categories.
-- **Naming**: File names must be descriptive and unique. Avoid OS-unsafe special characters.
-- **Tagging**: Use tags for cross-cutting concerns (e.g., status, priority, specific attributes) rather than as primary organizational categories.
+Adopting the LYT (Linking Your Thinking) system, vault organization is structured around the **ACE Framework**, which uses broad, top-level physical spaces (folders) corresponding to mental spaces, while avoiding rigid category hierarchies:
 
-## 6. Map of Content (MOC) Strategy
+- **00_Inbox**: A landing page at the vault root for all raw notes, audio recordings, or temporary files. This is the entry point for automated AI triage or manual classification.
+- **01_Atlas** (Knowledge Space / Space): Intended "to understand" (Learning Mode). Stores permanent knowledge cards, MOC indexes, and source reference materials.
+- **02_Calendar** (Time Space / Time): Intended "to focus" (Reflection Mode). Stores chronological daily journals, weekly reviews, and meeting records.
+- **03_Efforts** (Action Space / Importance): Intended "to act" (Execution Mode). Holds active projects, tasks, focus areas, and completed deliverables.
+- **Flat Folder Structure**: Restrict folder depth inside Atlas and Efforts. Rely on links and content maps rather than deep folders to form relationships between notes.
+- **File Naming**: Names must be unique, highly descriptive, and avoid OS-unsafe special characters.
 
-MOCs provide flexible, non-linear structure and context to notes, complementing the PARA folder system.
+## 5. Knowledge Synthesis and Note Types
+
+To ensure notes represent original thought rather than flat definitions, notes within the Atlas knowledge space are structured into **5 distinct note types**:
+
+- **Things**: Concepts, frameworks, or tools ("What is this?").
+- **Statements**: Personal opinions, insights, or principles ("What do I think?"). Writing statements is the key driver of value in personal knowledge management.
+- **Questions**: Unresolved queries, areas for further exploration ("What am I curious about?").
+- **Quotes**: Highlights, citations, and thoughts from others ("What do others say?").
+- **People**: Context about individuals, teams, or organizations ("Who is this person?").
+
+## 6. Maps of Content (MOC) Strategy
+
+MOCs serve as curated map notes that index, group, and contextualize links to other notes, providing an essential "bird's-eye view" to balance bottom-up note growth.
 
 ### 6.1. Types of MOCs
-- **Subject MOC**: Maps out a specific Area or Resource. It serves as an entry point to a cluster of related notes.
-- **Project MOC**: Acts as a "thinking workspace" or "workbench" to assemble ideas, research materials, and drafts for a specific project goal.
-- **Fleeting MOC**: A temporary staging area for new information to be triaged and linked into the PARA structure.
+- **Subject MOC**: Maps out a specific knowledge area. It provides a structured entry point to a cluster of related concepts in the Atlas.
+- **Project MOC**: Acts as a dynamic "thinking workspace" or "workbench" to organize ideas, drafts, and tasks for a specific project goal in Efforts.
+- **Fleeting MOC**: A temporary workbench for triaging and linking high-growth note clusters before they mature into Atlas MOCs.
 
 ### 6.2. Knowledge Synthesis Principles
-- **Action over Collection**: Prioritize "thinking" over "collecting." Avoid becoming a "librarian" of unused information.
-- **Opinion Notes**: MOCs should include personal insights, summaries, and viewpoints to synthesize information into knowledge.
-- **Topic Deconstruction**: Break broad, overwhelming topics into specific sub-MOCs or "Favorite Questions" (Feynman's approach) to maintain focus.
-- **Bottom-up Growth**: Let MOCs evolve organically as note density increases, rather than forcing a top-down structure prematurely.
+- **Action over Collection**: Prioritize synthesis and personal thinking over information hoarding.
+- **Opinion Notes**: MOCs should contain personal narratives and summaries to weave raw notes into active knowledge.
+- **Bottom-up Growth**: Let MOCs emerge organically once notes on a topic reach a critical mass (e.g. 5+ related notes), rather than building rigid top-down schemas prematurely.
+- **Incubation and Sedimentation**: Use the MOC workspace to incubate ideas during projects, and sediment refined insights back into the Atlas upon project completion.
 
-### 6.3. System Dynamics
-- **Dynamic Movement**: Knowledge should flow between PARA categories. A Resource may mature into an Area, or spark a new Project.
-- **Incubation and沉澱 (Sedimentation)**: Use the MOC workspace to incubate ideas during projects, and sediment the refined knowledge back into Areas or Resources upon completion.
+## 7. AI-Agent PKM and Google Antigravity Workflows
 
-## 7. Validation Checklist
+Google Antigravity interfaces directly with the local Obsidian vault via native file system access and STDIO channels. To maximize AI coordination and efficiency, follow these guidelines:
+
+### 7.1. MOC-First AI Context
+MOCs are the ultimate structure for AI-agent compatibility. Because an MOC indexes an entire subject area, the AI agent can open a single MOC note to instantly comprehend the context and structure of your thoughts, rather than wasting tokens traversing separate files.
+
+### 7.2. Vault Skill Configuration
+Establish a standard directory `.agent/skills/` (e.g., `.agent/skills/obsidian/`) to store custom `SKILL.md` documents. These define specific operational rules that the Antigravity agent will automatically parse and follow when editing.
+
+### 7.3. Style Guide & Vibe Coding
+Store vault formatting preferences (such as HSL color variables, full-width layouts, or writing style examples) inside a dedicated `Style Guide.md` note. The agent will read this guide to mimic your unique design taste and writing voice.
+
+### 7.4. Inbox Automation & Triage
+Utilize natural language prompts to task the Antigravity agent with automated housekeeping:
+- "Clean up my Inbox by analyzing note content and suggesting the correct ACE folders."
+- "Format this raw transcript, extract next steps into a `> [!todo]` callout, and add interactive checkboxes."
+
+### 7.5. Version Control & Safety
+- **Mandatory Backup**: Since the AI agent has direct file-system access, you must use a Git repository (e.g., the Obsidian Git plugin) to track, commit, and audit agent-made edits.
+- **Workflows Configuration**: Define local automation chains in `~/.gemini/antigravity/global_workflows/` to trigger slash commands:
+  - `/note-onboard`: Scan vault directories and index context.
+  - `/note-vault`: Let user to set local path of obsidian vault for context.
+  - `/note-inbox`: User provide content (voice, image, or text), AI process and input into the inbox.
+
+## 8. Validation Checklist
 
 Before finalizing a document, ensure:
-1. Properties (YAML) are valid and complete.
+1. Properties (YAML) are valid and complete, including a descriptive `type`.
 2. All wikilinks point to existing notes or intended new notes.
 3. Canvas IDs are unique and edge references are valid.
 4. Base YAML schema is correct.
 5. No icons or emojis are used in the document structure as per project rules.
 6. Bit/byte explanations are formatted correctly in Markdown tables for clarity.
-7. Vault organization follows the PARA framework and MOC synthesis principles.
+7. Vault organization follows the ACE folder framework and MOC synthesis principles.
+8. Vault changes are backed up via Git before executing complex AI modifications.

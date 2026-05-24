@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Agent - Task Workflow</title>
+    <style>
+        :root {
+            --ivory: #FAF9F5;
+            --paper: #FFFFFF;
+            --slate: #141413;
+            --clay: #D97757;
+            --clay-d: #B85C3E;
+            --oat: #E3DACC;
+            --olive: #788C5D;
+            --rust: #B04A3F;
+            --gray-50: #F0EEE6;
+            --gray-200: #D1CFC5;
+            --gray-500: #87867F;
+            --gray-800: #3D3D3A;
+            --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+            --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: var(--sans);
+            background-color: var(--ivory);
+            color: var(--gray-800);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 2rem;
+            background-color: var(--paper);
+            border-bottom: 1.5px solid var(--gray-200);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            font-family: var(--serif);
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--slate);
+        }
+
+        .navbar-brand span {
+            color: var(--clay);
+            font-style: italic;
+        }
+
+        .navbar-steps {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            font-family: var(--mono);
+            color: var(--gray-500);
+            background: none;
+            border: 1.5px solid transparent;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--slate);
+            border-color: var(--slate);
+            background-color: var(--paper);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .model-select {
+            padding: 0.4rem;
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            color: var(--gray-800);
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+        }
+        
+        .model-select:focus {
+            outline: none;
+            border-color: var(--clay);
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 2.5rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .card {
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(20,20,19,0.05);
+            margin-bottom: 2rem;
+        }
+
+        .placeholder-card {
+            background-color: var(--paper);
+            border: 1.5px dashed var(--gray-200);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            color: var(--gray-500);
+        }
+        
+        .placeholder-card h2 {
+            font-family: var(--serif);
+            font-weight: 500;
+            color: var(--slate);
+            margin-bottom: 0.75rem;
+        }
+
+        .eyebrow {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            margin-bottom: 6px;
+        }
+
+        h1, h2 {
+            font-family: var(--serif);
+            font-weight: 500;
+            color: var(--slate);
+            margin-top: 0;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--gray-800);
+        }
+
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            color: var(--slate);
+            font-family: inherit;
+            font-size: 0.875rem;
+            box-sizing: border-box;
+            transition: border-color 0.12s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--clay);
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 999px;
+            border: 1.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--slate);
+            color: var(--ivory);
+            border-color: var(--slate);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--gray-800);
+        }
+        
+        .btn-primary:disabled {
+            background-color: var(--gray-200);
+            border-color: var(--gray-200);
+            color: var(--gray-500);
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--gray-800);
+            border-color: var(--gray-200);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--gray-500);
+        }
+
+        .btn-secondary.copied {
+            background-color: var(--olive);
+            border-color: var(--olive);
+            color: var(--ivory);
+        }
+
+        .btn-full {
+            flex: 1;
+        }
+
+        .debug-console {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1.5px dashed var(--gray-200);
+            background-color: var(--paper);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            min-height: 100px;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
+        .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--gray-200);
+            border-top: 2px solid var(--clay);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
+        <div class="navbar-steps">
+            <button id="nav-create" class="nav-link" onclick="switchView('create')" data-i18n="navCreate">1. Create</button>
+            <button id="nav-spec" class="nav-link" onclick="switchView('spec')" data-i18n="navSpec">2. Spec</button>
+            <button id="nav-prototype" class="nav-link" onclick="switchView('prototype')" data-i18n="navPrototype">3. Prototype</button>
+        </div>
+        <div class="nav-right">
+            <select id="langSelect" class="model-select" onchange="changeLanguage()">
+                <option value="en">EN</option>
+                <option value="zh">中文</option>
+            </select>
+            <select id="globalModelSelect" class="model-select">
+                <option value="gemini-2.5-flash" data-i18n="modelLoading">Loading models...</option>
+            </select>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- 1. CREATE VIEW -->
+        <div id="view-create" class="view-section">
+            <div class="card">
+                <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
+                <h1 data-i18n="titleCreate">Create a New Task</h1>
+                <div class="subtitle" data-i18n="subCreate">Scope, organize, and submit your new coding task. The agent will dynamically design a custom specification UI inside the Spec tab.</div>
+
+                <form id="createForm" onsubmit="handleCreate(event)">
+                    <div class="form-group">
+                        <label data-i18n="lblTitle">Task Title</label>
+                        <input type="text" id="title" data-i18n-ph="phTitle" placeholder="e.g. Implement CLI file-indexer" oninput="saveField(this)" required>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblCategory">Category</label>
+                        <select id="category" onchange="saveField(this)">
+                            <option value="Feature" data-i18n="optFeature">Feature</option>
+                            <option value="Bugfix" data-i18n="optBugfix">Bugfix</option>
+                            <option value="Refactor" data-i18n="optRefactor">Refactor</option>
+                            <option value="Research" data-i18n="optResearch">Research</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblGoal">Goal</label>
+                        <textarea id="goal" rows="3" data-i18n-ph="phGoal" placeholder="Describe the main objectives of this task..." oninput="saveField(this)" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblContext">Background Context</label>
+                        <textarea id="context" rows="3" data-i18n-ph="phContext" placeholder="Provide background info, technical constraints, or architectural context..." oninput="saveField(this)"></textarea>
+                    </div>
+                    <div class="btn-row">
+                        <button type="button" class="btn btn-secondary" id="btn-copy-scoping" onclick="copyScopingMarkdown()" data-i18n="btnCopyScoping">Copy Scoping as Markdown</button>
+                        <button type="submit" class="btn btn-primary btn-full" id="btn-create" data-i18n="btnSubmit">Submit Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 2. SPEC VIEW PLACEHOLDER -->
+        <div id="view-spec" class="view-section" data-empty="true" style="display:none;">
+            <div class="placeholder-card">
+                <h2 data-i18n="specTitle">Specification Stage</h2>
+                <p data-i18n="specDesc">No specifications have been generated yet. Please fill out the scoping form in the Create tab and click Submit Task to generate them.</p>
+            </div>
+        </div>
+
+        <!-- 3. PROTOTYPE VIEW PLACEHOLDER -->
+        <div id="view-prototype" class="view-section" data-empty="true" style="display:none;">
+            <div class="placeholder-card">
+                <h2 data-i18n="protoTitle">Prototyping & Architecture Stage</h2>
+                <p data-i18n="protoDesc">No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.</p>
+            </div>
+        </div>
+
+        <!-- Debug Console -->
+        <div class="debug-console">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
+                <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
+                    <div class="spinner"></div> <span data-i18n="processing">Processing...</span>
+                </div>
+            </div>
+            <pre id="globalDebug" class="debug-pre" data-i18n="consoleReady">Ready. Waiting for user interaction...</pre>
+        </div>
+    </div>
+
+    <script>
+        const i18n = {
+            en: {
+                brandSpan: 'Workflow',
+                navCreate: '1. Create',
+                navSpec: '2. Spec',
+                navPrototype: '3. Prototype',
+                modelLoading: 'Loading models...',
+                eyebrowInit: 'Task Initiation',
+                titleCreate: 'Create a New Task',
+                subCreate: 'Scope, organize, and submit your new coding task. The agent will dynamically design a custom specification UI inside the Spec tab.',
+                lblTitle: 'Task Title',
+                phTitle: 'e.g. Implement CLI file-indexer',
+                lblCategory: 'Category',
+                lblGoal: 'Goal',
+                phGoal: 'Describe the main objectives of this task...',
+                lblContext: 'Background Context',
+                phContext: 'Provide background info, technical constraints, or architectural context...',
+                btnCopyScoping: 'Copy Scoping as Markdown',
+                btnSubmit: 'Submit Task',
+                optFeature: 'Feature',
+                optBugfix: 'Bugfix',
+                optRefactor: 'Refactor',
+                optResearch: 'Research',
+                specTitle: 'Specification Stage',
+                specDesc: 'No specifications have been generated yet. Please fill out the scoping form in the Create tab and click Submit Task to generate them.',
+                protoTitle: 'Prototyping & Architecture Stage',
+                protoDesc: 'No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.',
+                consoleTitle: 'System Console & AI Output',
+                processing: 'Processing...',
+                consoleReady: 'Ready. Waiting for user interaction...',
+                copied: 'Copied'
+            },
+            zh: {
+                brandSpan: '工作流',
+                navCreate: '1. 建立',
+                navSpec: '2. 規格',
+                navPrototype: '3. 原型',
+                modelLoading: '載入模型中...',
+                eyebrowInit: '任務啟動',
+                titleCreate: '建立新任務',
+                subCreate: '定義、組織並提交您的新程式開發任務。Agent 會在「規格」分頁中動態設計專屬的規格 UI。',
+                lblTitle: '任務標題',
+                phTitle: '例如：實作 CLI 檔案索引工具',
+                lblCategory: '類別',
+                lblGoal: '目標',
+                phGoal: '請描述此任務的主要目標...',
+                lblContext: '背景脈絡',
+                phContext: '請提供背景資訊、技術限制或架構脈絡...',
+                btnCopyScoping: '複製 Scoping 內容',
+                btnSubmit: '提交任務',
+                optFeature: '新功能 (Feature)',
+                optBugfix: '修復 (Bugfix)',
+                optRefactor: '重構 (Refactor)',
+                optResearch: '研究 (Research)',
+                specTitle: '規格階段',
+                specDesc: '尚未生成任何規格。請先在「建立」分頁中填寫範圍表單並點擊「提交任務」來生成。',
+                protoTitle: '原型與架構階段',
+                protoDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認您的規格，並點擊「產生原型」。',
+                consoleTitle: '系統終端與 AI 輸出',
+                processing: '處理中...',
+                consoleReady: '就緒。等待使用者操作...',
+                copied: '已複製'
+            }
+        };
+
+        function changeLanguage() {
+            const lang = document.getElementById('langSelect').value;
+            localStorage.setItem('app_lang', lang);
+            applyLanguage(lang);
+        }
+
+        function applyLanguage(lang) {
+            const dict = i18n[lang] || i18n['en'];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) el.textContent = dict[key];
+            });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+                const key = el.getAttribute('data-i18n-ph');
+                if (dict[key]) el.placeholder = dict[key];
+            });
+            
+            const modelSelect = document.getElementById('globalModelSelect');
+            if (modelSelect && modelSelect.options.length > 0 && modelSelect.options[0].getAttribute('data-i18n') === 'modelLoading') {
+                modelSelect.options[0].textContent = dict['modelLoading'];
+            }
+        }
+
+        function getActiveTabFromUrl() {
+            const path = window.location.pathname.replace(/^\/+/, '');
+            if (['create', 'spec', 'prototype'].includes(path)) {
+                return path;
+            }
+            return null;
+        }
+
+        function saveField(el) {
+            localStorage.setItem('task_scoping_' + el.id, el.value);
+        }
+
+        function restoreFields() {
+            const fields = ['title', 'category', 'goal', 'context'];
+            fields.forEach(id => {
+                const val = localStorage.getItem('task_scoping_' + id);
+                const el = document.getElementById(id);
+                if (el && val !== null) {
+                    el.value = val;
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const savedLang = localStorage.getItem('app_lang') || 'en';
+            const langSelect = document.getElementById('langSelect');
+            if (langSelect) langSelect.value = savedLang;
+            applyLanguage(savedLang);
+
+            restoreFields();
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    if (data.server_instance_id) {
+                        const savedInstanceId = localStorage.getItem('server_instance_id');
+                        if (savedInstanceId && savedInstanceId !== data.server_instance_id) {
+                            // Server restarted! Clear task_scoping fields
+                            const fields = ['title', 'category', 'goal', 'context'];
+                            fields.forEach(id => {
+                                localStorage.removeItem('task_scoping_' + id);
+                                const el = document.getElementById(id);
+                                if (el) {
+                                    if (id === 'category') el.value = 'Feature';
+                                    else el.value = '';
+                                }
+                            });
+                        }
+                        localStorage.setItem('server_instance_id', data.server_instance_id);
+                    }
+
+                    const select = document.getElementById('globalModelSelect');
+                    select.innerHTML = '';
+                    const defaultModel = data.default_model || 'gemini-2.5-flash';
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        if (model === defaultModel) option.selected = true;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error('Could not load models', err);
+                logDebug('ERROR: Could not load models. ' + err.message);
+            }
+
+            // Resolve initial active tab
+            let defaultTab = 'create';
+            const specDiv = document.getElementById('view-spec');
+            const protoDiv = document.getElementById('view-prototype');
+            if (protoDiv && !protoDiv.dataset.empty) defaultTab = 'prototype';
+            else if (specDiv && !specDiv.dataset.empty) defaultTab = 'spec';
+
+            const activeTab = getActiveTabFromUrl() || sessionStorage.getItem('activeTab') || defaultTab;
+            switchView(activeTab, false);
+        });
+
+        function switchView(viewName, updateUrl = true) {
+            const sections = ['create', 'spec', 'prototype'];
+            sections.forEach(sec => {
+                const el = document.getElementById('view-' + sec);
+                const btn = document.getElementById('nav-' + sec);
+                if (el) el.style.display = (sec === viewName) ? 'block' : 'none';
+                if (btn) {
+                    if (sec === viewName) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            });
+            sessionStorage.setItem('activeTab', viewName);
+            if (updateUrl && window.location.pathname !== '/' + viewName) {
+                history.pushState(null, '', '/' + viewName);
+            }
+        }
+
+        window.addEventListener('popstate', () => {
+            const tab = getActiveTabFromUrl();
+            if (tab) {
+                switchView(tab, false);
+            }
+        });
+
+        function logDebug(message) {
+            const pre = document.getElementById('globalDebug');
+            if (pre) pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
+        }
+
+        function setLoading(isLoading, btnId) {
+            const indicator = document.getElementById('loading-indicator');
+            if (indicator) indicator.style.display = isLoading ? 'flex' : 'none';
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = isLoading;
+        }
+
+        async function handleCreate(event) {
+            event.preventDefault();
+            const btnId = 'btn-create';
+            const data = {
+                title: document.getElementById('title').value,
+                category: document.getElementById('category').value,
+                goal: document.getElementById('goal').value,
+                context: document.getElementById('context').value,
+                language: localStorage.getItem('app_lang') || 'en'
+            };
+
+            setLoading(true, btnId);
+            const modelSelect = document.getElementById('globalModelSelect');
+            data.model = modelSelect ? modelSelect.value : 'gemini-2.5-flash';
+            logDebug(`Sending 'task-create' request using model ${data.model}...`);
+
+            try {
+                const res = await fetch('/api/agent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: 'task-create', data })
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    logDebug(`SUCCESS (task-create):\n` + result.response);
+                    logDebug(`Generating your specification UI...`);
+                    sessionStorage.setItem('activeTab', 'spec');
+                    setTimeout(() => {
+                        window.location.href = '/spec';
+                    }, 1500);
+                } else {
+                    logDebug(`ERROR (task-create):\n` + (result.message || 'Unknown error'));
+                }
+            } catch (err) {
+                logDebug(`NETWORK ERROR (task-create):\n` + err.message);
+            } finally {
+                setLoading(false, btnId);
+            }
+        }
+
+        function copyScopingMarkdown() {
+            const title = document.getElementById('title').value || 'Untitled Task';
+            const category = document.getElementById('category').value;
+            const goal = document.getElementById('goal').value || 'No goal provided.';
+            const context = document.getElementById('context').value || 'No context provided.';
+            
+            const markdown = `# Task Scoping: ${title}
+
+- **Category:** ${category}
+
+## Goal
+${goal}
+
+## Background Context
+${context}`;
+
+            const btn = document.getElementById('btn-copy-scoping');
+            function flash() {
+                const dict = i18n[localStorage.getItem('app_lang') || 'en'];
+                btn.textContent = dict['copied'] || 'Copied';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = dict['btnCopyScoping'] || 'Copy Scoping as Markdown';
+                    btn.classList.remove('copied');
+                }, 1200);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(markdown).then(flash, flash);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = markdown;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+                flash();
+            }
+        }
+    </script>
+</body>
+</html>

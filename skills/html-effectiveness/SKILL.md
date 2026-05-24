@@ -15,7 +15,41 @@ When presenting spatial information, timelines, comparisons, visual designs, or 
 - **Dialogs & Scaffolding:** If any dialog item, modal window, or form will help the user to better design or define their work, it is highly encouraged to use them.
 - **No Fabricated Data:** Do not invent runtime data or screenshots.
 
-## 2. Triggers
+### Output Constraints (Mandatory for every HTML output)
+- **Single-File Self-Containment:** All HTML, CSS, JavaScript, and SVG assets must be fully inlined. Do not rely on CDNs or external libraries.
+- **Mandatory Export:** Any HTML file that allows user interaction or input must include a "Copy as Markdown" button to export its state.
+- **Desktop Responsive:** The layout must scale beautifully on screens from 1280px laptops up to 1920px external monitors. Mobile responsiveness is not required.
+
+### Style & Design Guidelines (Best Practices)
+To produce premium, highly readable HTML artifacts matching reference standards, incorporate these cohesive patterns:
+- **System Typography Stacks:** Do not load external fonts. Define and use native system fonts for consistent, fast rendering:
+  - Sans-serif (for UI/body): `system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
+  - Serif (for editorial headings): `ui-serif, Georgia, "Times New Roman", Times, serif`
+  - Monospace (for code/identifiers): `ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace`
+- **Cohesive Design Tokens:** Establish a warm, unified color scheme using CSS variables at the `:root`:
+  - `--ivory`: `#FAF9F5` (Soft background)
+  - `--paper`: `#FFFFFF` (Card background)
+  - `--slate`: `#141413` (Main text/dark UI elements)
+  - `--clay`: `#D97757` (Primary accent/attention/attention alerts)
+  - `--oat`: `#E3DACC` (Warm beige details/medium risk)
+  - `--olive`: `#788C5D` (Success/safe states/code additions)
+  - `--rust`: `#B04A3F` (Blocking issues/errors/code deletions)
+- **Navigation & Scaffolding:**
+  - **Eyebrow Headers:** Use a small, tracked, uppercase monospace `.eyebrow` class above serif headings to frame context.
+  - **Status & Risk Maps:** At the top of complex documents, provide colored anchor link chips as a navigable index.
+  - **Native Accordions:** Style native `<details>` and `<summary>` tags with custom summary text, borders, and hover states for clean collapsible details.
+  - **Copy-to-Clipboard Utilities:** Export buttons must trigger standard clipboard APIs with fallback `<textarea>` selection routines.
+
+## 2. Usage Scenario Judgment (Shape Test)
+After reading the user's request, perform a "Shape Test" on the expected answer to decide whether to use HTML:
+
+| Answer Shape | Format to Use |
+|---|---|
+| A single statement, a number, or a brief conclusion | Direct text response |
+| A few steps, a list of key points, or a single code snippet | Markdown |
+| Complex spatial layouts, timelines, side-by-side comparisons, dashboards, or multi-step editing flows | HTML |
+
+## 3. Triggers
 Apply this skill whenever the user requests or the task naturally fits one of the following:
 - **Exploration & Planning:** Side-by-side comparisons of code approaches, visual design directions, or implementation timelines.
 - **Code Review & Understanding:** Annotated diffs with margin notes, PR writeups, or module maps (boxes and arrows).
@@ -25,13 +59,13 @@ Apply this skill whenever the user requests or the task naturally fits one of th
 - **Research & Reports:** Feature explainers, concept explainers, weekly status reports, or incident timelines.
 - **Custom Editing Interfaces:** Throwaway UIs like ticket triage boards, feature flag editors, or prompt tuners with "copy-to-clipboard" exports.
 
-## 3. Execution
+## 4. Execution
 1. Think about the structure and interactive capabilities of the HTML artifact before writing code.
 2. Use the `write_to_file` tool to save the `.html` file.
 3. Use the `run_command` tool to run the custom HTTP server script: `~/.gemini/antigravity/skills/html-effectiveness/scripts/serve_html.py <directory_of_html_file>`. Send it to the background (e.g., `...serve_html.py . &> /dev/null &`) or use appropriate timeouts so it doesn't block. Wait a short duration (e.g. 1000ms) to capture the printed port before making the command async.
 4. The script will output the port it chose (e.g., `Server started at http://localhost:43218`). Provide the user with the localhost URL (e.g., `http://localhost:<port>/filename.html`) so they can access it via their browser. Do not output the entire HTML code in your chat response.
 
-## 4. Special Commands
+## 5. Special Commands
 ### `/task-create`
 When the user explicitly issues the `/task-create` command:
 1. Generate an interactive HTML discussion interface tailored for scoping the new task.
@@ -40,18 +74,14 @@ When the user explicitly issues the `/task-create` command:
 
 ### `/task-spec`
 When the user explicitly issues the `/task-spec` command:
-1. Based on the initial task discussion, design an interactive specification UI.
+1. Based on the initial task discussion, design an interactive specification UI inside the Spec tab.
 2. The UI must clearly map out the operating environment, feature requirements, acceptance criteria (conditions), and necessary tools.
 3. Enable interactive fields or forms where the specification can be refined, edited, or expanded directly in the browser.
+4. **Mandatory Text Dialogue**: You MUST include a large multi-line text input box (`<textarea id="scopingInput">`) so the user can easily submit additional scoped instructions or custom scoping requirements to the `/api/agent` backend with the `task-spec` command.
 
 ### `/task-prototype`
 When the user explicitly issues the `/task-prototype` command:
 1. Construct an interactive prototype or visual representation of the proposed solution based on the defined spec.
 2. Implement mock workflows, interactive wireframes, layouts, or simulated logic so the user can visualize and interact with the main features.
 3. Keep the prototype highly interactive to encourage hands-on exploration.
-
-### `/task-review`
-When the user explicitly issues the `/task-review` command:
-1. Capture any inputs, edits, or feedback submitted by the user through the interactive elements of the HTML UI.
-2. Seamlessly update the corresponding spec or prototype files to reflect the feedback.
-3. Present the updated version or a clear revision comparison to the user, allowing continuous iterative review.
+4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="prototypeFeedback">`) for final implementation/verification feedback. When the user clicks the "Finalize & Execute" button, it sends the input to the `/api/agent` backend under the `task-prototype` command, which directly implements the verified, functional solution in the user's workspace, running tests and updating the prototype tab to display a beautiful completion dashboard.

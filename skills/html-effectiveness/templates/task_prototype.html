@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Agent - Prototype & Execution</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --ivory: #FAF9F5;
+            --paper: #FFFFFF;
+            --slate: #141413;
+            --clay: #D97757;
+            --clay-d: #B85C3E;
+            --oat: #E3DACC;
+            --olive: #788C5D;
+            --rust: #B04A3F;
+            --gray-50: #F0EEE6;
+            --gray-200: #D1CFC5;
+            --gray-500: #87867F;
+            --gray-800: #3D3D3A;
+            --serif: ui-serif, Georgia, "Times New Roman", Times, serif;
+            --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: var(--sans);
+            background-color: var(--ivory);
+            color: var(--gray-800);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 2rem;
+            background-color: var(--paper);
+            border-bottom: 1.5px solid var(--gray-200);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            font-family: var(--serif);
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--slate);
+        }
+
+        .navbar-brand span {
+            color: var(--clay);
+            font-style: italic;
+        }
+
+        .navbar-steps {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-link {
+            font-family: var(--mono);
+            color: var(--gray-500);
+            background: none;
+            border: 1.5px solid transparent;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.12s ease;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            color: var(--slate);
+            border-color: var(--slate);
+            background-color: var(--paper);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .model-select {
+            padding: 0.4rem;
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            color: var(--gray-800);
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+        }
+        
+        .model-select:focus {
+            outline: none;
+            border-color: var(--clay);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2.5rem auto;
+            padding: 0 1.5rem;
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 900px) {
+            .layout-grid {
+                grid-template-columns: 3fr 2fr;
+            }
+        }
+
+        .card {
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 1px 3px rgba(20,20,19,0.05);
+            margin-bottom: 2rem;
+        }
+
+        .placeholder-card {
+            background-color: var(--paper);
+            border: 1.5px dashed var(--gray-200);
+            border-radius: 12px;
+            padding: 4rem 2rem;
+            text-align: center;
+            color: var(--gray-500);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .placeholder-card h2 {
+            font-family: var(--serif);
+            font-weight: 500;
+            color: var(--slate);
+            margin-bottom: 0.75rem;
+            margin-top: 0;
+        }
+
+        .eyebrow {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            margin-bottom: 6px;
+        }
+
+        h2 {
+            font-family: var(--serif);
+            font-weight: 500;
+            color: var(--slate);
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--gray-800);
+        }
+
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            color: var(--slate);
+            font-family: inherit;
+            font-size: 0.875rem;
+            box-sizing: border-box;
+            transition: border-color 0.12s ease;
+        }
+
+        textarea {
+            resize: none;
+            overflow: hidden;
+        }
+
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: var(--clay);
+        }
+
+        /* Structured List Editor Styles */
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .list-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .list-textarea {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            color: var(--slate);
+            background-color: var(--gray-50);
+            resize: none;
+            overflow: hidden;
+            min-height: 42px;
+            line-height: 1.4;
+            font-family: inherit;
+        }
+
+        .list-textarea:focus {
+            background-color: var(--paper);
+            border-color: var(--clay);
+        }
+
+        .btn-action-small {
+            padding: 0.4rem 0.8rem;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            background: var(--paper);
+            color: var(--gray-800);
+            cursor: pointer;
+            min-height: 42px;
+        }
+
+        .btn-action-small:hover {
+            border-color: var(--rust);
+            color: var(--rust);
+        }
+
+        .btn-add-small {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.75rem;
+            border-color: var(--olive);
+            color: var(--olive);
+        }
+
+        .btn-add-small:hover {
+            background-color: var(--olive);
+            color: var(--ivory);
+        }
+
+        /* References Panel Styles */
+        .reference-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 0.75rem;
+        }
+
+        .reference-type {
+            width: auto;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            padding: 0.4rem;
+            background-color: var(--paper);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+        }
+
+        .reference-input {
+            flex: 1;
+            font-size: 0.8125rem;
+            padding: 0.4rem;
+        }
+
+        .reference-btn-add {
+            padding: 0.4rem 1rem;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 6px;
+            border: 1.5px solid var(--slate);
+            background-color: var(--slate);
+            color: var(--ivory);
+            cursor: pointer;
+        }
+
+        .reference-btn-add:hover {
+            background-color: var(--gray-800);
+        }
+
+        .ref-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .ref-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: var(--gray-50);
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            border: 1.5px solid var(--gray-200);
+            font-size: 0.8125rem;
+        }
+
+        .ref-item-tag {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            margin-right: 0.5rem;
+            font-weight: 600;
+        }
+
+        .ref-item-tag.local {
+            background-color: var(--oat);
+            color: var(--gray-800);
+        }
+
+        .ref-item-tag.url {
+            background-color: var(--gray-200);
+            color: var(--slate);
+        }
+
+        .ref-item-value {
+            flex: 1;
+            font-family: var(--mono);
+            word-break: break-all;
+        }
+
+        .ref-btn-delete {
+            background: none;
+            border: none;
+            color: var(--rust);
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Question Card Style */
+        .question-card {
+            border-left: 3px solid var(--clay);
+            background-color: var(--gray-50);
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            border: 1.5px solid var(--gray-200);
+            border-left: 3px solid var(--clay);
+        }
+
+        .question-label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--slate);
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border-radius: 999px;
+            border: 1.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.12s ease;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background-color: var(--slate);
+            color: var(--ivory);
+            border-color: var(--slate);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--gray-800);
+        }
+        
+        .btn-primary:disabled {
+            background-color: var(--gray-200);
+            border-color: var(--gray-200);
+            color: var(--gray-500);
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--gray-800);
+            border-color: var(--gray-200);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--gray-500);
+        }
+
+        .btn-secondary.copied {
+            background-color: var(--olive);
+            border-color: var(--olive);
+            color: var(--ivory);
+        }
+
+        .btn-accent {
+            background-color: var(--clay);
+            color: var(--ivory);
+            border-color: var(--clay);
+        }
+
+        .btn-accent:hover {
+            background-color: var(--clay-d);
+        }
+
+        .btn-full {
+            flex: 1;
+        }
+
+        .debug-console {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1.5px dashed var(--gray-200);
+            background-color: var(--paper);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            min-height: 100px;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
+        .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--gray-200);
+            border-top: 2px solid var(--clay);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Completed Dashboard Styles */
+        .completed-header {
+            background-color: var(--paper);
+            border: 2px solid var(--olive);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .completed-header h1 {
+            color: var(--olive);
+            font-family: var(--serif);
+            margin: 0 0 0.5rem 0;
+            font-weight: 500;
+        }
+
+        .completed-header p {
+            margin: 0;
+            color: var(--gray-800);
+            font-size: 0.875rem;
+        }
+
+        .completed-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            background-color: var(--gray-50);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 8px;
+            padding: 1.2rem;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: var(--slate);
+        }
+
+        .completed-list-item {
+            position: relative;
+            padding-left: 1.5rem;
+        }
+
+        .completed-list-item::before {
+            content: "[✔]";
+            position: absolute;
+            left: 0;
+            color: var(--olive);
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .file-list-box {
+            background-color: var(--gray-50);
+            border: 1.5px solid var(--gray-200);
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: var(--mono);
+            font-size: 0.8125rem;
+            color: var(--slate);
+        }
+
+        .file-list-box div {
+            margin-bottom: 0.25rem;
+        }
+        .file-list-box div:last-child {
+            margin-bottom: 0;
+        }
+
+        .metadata-box {
+            background-color: var(--gray-50);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            border: 1.5px solid var(--gray-200);
+        }
+
+        .metadata-box div {
+            margin-bottom: 0.5rem;
+        }
+        .metadata-box div:last-child {
+            margin-bottom: 0;
+        }
+
+        .metadata-box strong {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            display: block;
+            text-transform: uppercase;
+        }
+
+        .rendered-markdown {
+            margin-top: 0.25rem;
+            line-height: 1.6;
+        }
+        .rendered-markdown h1, .rendered-markdown h2, .rendered-markdown h3, .rendered-markdown h4 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-family: var(--serif);
+            color: var(--slate);
+        }
+        .rendered-markdown p {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+        }
+        .rendered-markdown ul, .rendered-markdown ol {
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            padding-left: 1.5rem;
+        }
+        .rendered-markdown code {
+            font-family: var(--mono);
+            background-color: var(--gray-200);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        .rendered-markdown pre {
+            background-color: var(--slate);
+            color: var(--olive);
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: var(--mono);
+            font-size: 0.8rem;
+        }
+        .rendered-markdown pre code {
+            background-color: transparent;
+            color: inherit;
+            padding: 0;
+            border-radius: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
+        <div class="navbar-steps">
+            <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
+            <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
+            <a href="/prototype" id="nav-prototype" class="nav-link active" data-i18n="navPrototype">3. Prototype</a>
+        </div>
+        <div class="nav-right">
+            <select id="langSelect" class="model-select" onchange="changeLanguage()">
+                <option value="en">EN</option>
+                <option value="zh">中文</option>
+            </select>
+            <select id="globalModelSelect" class="model-select">
+                <option value="gemini-3.1-flash-lite" data-i18n="modelLoading">Loading models...</option>
+            </select>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Placeholder View -->
+        <div id="view-placeholder" class="placeholder-card" style="display:none;">
+            <h2 data-i18n="protoTitle">Prototyping & Architecture Stage</h2>
+            <p data-i18n="protoDesc">No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.</p>
+            <a href="/spec" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="btnGoBack">Go to Spec Tab</a>
+        </div>
+
+        <!-- Completed View Dashboard (No Emojis, No Icons) -->
+        <div id="view-completed" style="display:none;">
+            <div class="completed-header">
+                <h1 data-i18n="titleCompleted">Task Finalized & Implemented</h1>
+                <p data-i18n="descCompleted">The agent has successfully applied modifications and written the final files into the workspace.</p>
+            </div>
+
+            <div class="card">
+                <div class="eyebrow" data-i18n="eyebrowSummary">Execution Summary</div>
+                <h2 data-i18n="titleSummary">Implementation Walkthrough</h2>
+                <div id="completedSummaryList" class="completed-list"></div>
+            </div>
+
+            <div class="layout-grid">
+                <div class="card">
+                    <div class="eyebrow" data-i18n="eyebrowFiles">Written Files</div>
+                    <h2 data-i18n="titleFiles">Files Created/Modified</h2>
+                    <div id="completedFiles" class="file-list-box"></div>
+                </div>
+
+                <div class="card">
+                    <div class="eyebrow" data-i18n="eyebrowVerify">Verification</div>
+                    <h2 data-i18n="titleVerify">Automated Validation Logs</h2>
+                    <div id="completedVerifyList" class="completed-list" style="background-color: var(--slate); border-color: var(--slate); color: var(--olive); font-family: var(--mono); font-size: 0.8125rem;"></div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 1.5rem; margin-bottom: 2rem;">
+                <a href="/reset" class="btn btn-primary" data-i18n="btnRestart">Start New Task</a>
+            </div>
+        </div>
+
+        <!-- Main Prototype Grid -->
+        <div id="view-main" class="layout-grid" style="display:none;">
+            <!-- Left Column: Visual Structured List Editors -->
+            <div>
+                <!-- File tree list editor -->
+                <div class="card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <div>
+                            <div class="eyebrow" data-i18n="eyebrowTree">Architecture Tree</div>
+                            <h2 style="margin: 0;" data-i18n="titleTree">Proposed File Tree Structure</h2>
+                        </div>
+                        <button type="button" class="btn-action-small btn-add-small" onclick="addFileRow('', 'new')" style="min-height: 30px;">+ Add File</button>
+                    </div>
+                    <div id="filesContainer" class="list-container"></div>
+                </div>
+
+                <!-- Workflow steps editor -->
+                <div class="card">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                        <div>
+                            <div class="eyebrow" data-i18n="eyebrowWorkflow">Solution Steps</div>
+                            <h2 style="margin: 0;" data-i18n="titleWorkflow">Workflow & Process Description</h2>
+                        </div>
+                        <button type="button" class="btn-action-small btn-add-small" onclick="addStepRow('')" style="min-height: 30px;">+ Add Step</button>
+                    </div>
+                    <div id="stepsContainer" class="list-container"></div>
+                </div>
+
+                <!-- Code Snippets Dynamic Container -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                    <h2 style="font-size: 1.15rem; margin: 0;" data-i18n="titleSnippets">Core Implementation Snippets</h2>
+                    <button type="button" class="btn btn-secondary" onclick="addSnippetCard('', 'python', '')" style="padding: 0.4rem 0.8rem; font-size: 0.75rem;" data-i18n="btnAddSnippet">+ Add File Code</button>
+                </div>
+                <div id="snippetsContainer"></div>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button type="button" class="btn btn-secondary" id="btn-copy-proto" onclick="copyPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopyProto">Copy Prototype as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-export-proto" onclick="exportPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportProto">Export Prototype as Markdown</button>
+                </div>
+            </div>
+
+            <!-- Right Column: Metadata, References, Answering Questions & Actions -->
+            <div>
+                <div class="card" style="padding: 1.5rem;">
+                    <div class="eyebrow" data-i18n="eyebrowMeta">Context Summary</div>
+                    <div class="metadata-box">
+                        <div>
+                            <strong data-i18n="lblMetaTitle">Title</strong>
+                            <span id="metaTitle">None</span>
+                        </div>
+                        <div>
+                            <strong data-i18n="lblMetaCategory">Category</strong>
+                            <span id="metaCategory">None</span>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <strong data-i18n="lblMetaGoal">Goal</strong>
+                            <div id="metaGoal" class="rendered-markdown">None</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- References Panel Card -->
+                <div class="card" style="padding: 1.5rem;">
+                    <div class="eyebrow" data-i18n="eyebrowReferences">Reference Materials</div>
+                    <h2 style="font-size: 1.15rem;" data-i18n="lblReferences">Import Reference Documents & Code / 匯入參考文件</h2>
+                    <div class="reference-row">
+                        <select id="refType" class="reference-type">
+                            <option value="local">Local Path / 本地路徑</option>
+                            <option value="url">URL / 外部連結</option>
+                        </select>
+                        <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com/...">
+                        <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
+                    </div>
+                    <div id="referencesList" class="ref-list"></div>
+                </div>
+
+                <div class="card" style="padding: 1.5rem;">
+                    <div class="eyebrow" data-i18n="eyebrowQuestions">Implementation Notes</div>
+                    <h2 style="font-size: 1.15rem;" data-i18n="titleQuestions">Open Questions</h2>
+                    <div id="questionsContainer"></div>
+                </div>
+
+                <div class="card" style="padding: 1.5rem;">
+                    <div class="eyebrow" data-i18n="eyebrowAction">Finalize Solution</div>
+                    <h2 style="font-size: 1.15rem;" data-i18n="titleAction">Submit Feedback or Execute</h2>
+                    <div class="form-group">
+                        <label data-i18n="lblWorkspacePath">Implementation Workspace Path</label>
+                        <input type="text" id="workspacePath" data-i18n-ph="phWorkspacePath" placeholder="e.g. ./ or C:/path/to/project" value="./">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblFeedbackInput">Implementation Feedback or Custom Commands</label>
+                        <textarea id="feedbackInput" rows="5" data-i18n-ph="phFeedbackInput" placeholder="Provide implementation feedback or click Finalize & Execute to write changes..."></textarea>
+                    </div>
+                    <div class="btn-row" style="flex-direction: column;">
+                        <button type="button" class="btn btn-secondary btn-full" id="btn-update-proto" onclick="handleAgentCall(true)" data-i18n="btnUpdateProto">Update Prototype</button>
+                        <button type="button" class="btn btn-accent btn-full" id="btn-finalize" onclick="handleAgentCall(false)" data-i18n="btnFinalize">Finalize & Execute</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Console -->
+        <div class="debug-console">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
+                <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
+                    <div class="spinner"></div> <span data-i18n="processing">Processing...</span>
+                </div>
+            </div>
+            <pre id="globalDebug" class="debug-pre" data-i18n="consoleReady">Ready. Waiting for user interaction...</pre>
+        </div>
+    </div>
+
+    <script>
+        const i18n = {
+            en: {
+                brandSpan: 'Workflow',
+                navCreate: '1. Create',
+                navSpec: '2. Spec',
+                navPrototype: '3. Prototype',
+                modelLoading: 'Loading models...',
+                protoTitle: 'Prototyping & Architecture Stage',
+                protoDesc: 'No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.',
+                btnGoBack: 'Go to Spec Tab',
+                titleCompleted: 'Task Finalized & Implemented',
+                descCompleted: 'The agent has successfully applied modifications and written the final files into the workspace.',
+                eyebrowSummary: 'Execution Summary',
+                titleSummary: 'Implementation Walkthrough',
+                eyebrowFiles: 'Written Files',
+                titleFiles: 'Files Created/Modified',
+                eyebrowVerify: 'Verification',
+                titleVerify: 'Automated Validation Logs',
+                btnRestart: 'Start New Task',
+                eyebrowTree: 'Architecture Tree',
+                titleTree: 'Proposed File Tree Structure',
+                eyebrowWorkflow: 'Solution Steps',
+                titleWorkflow: 'Workflow & Process Description',
+                titleSnippets: 'Core Implementation Snippets',
+                btnAddSnippet: '+ Add File Code',
+                btnCopyProto: 'Copy Prototype as Markdown',
+                btnExportProto: 'Export Prototype as Markdown',
+                eyebrowReferences: 'Reference Materials',
+                lblReferences: 'Import Reference Documents & Code / 匯入參考文件',
+                btnAddRef: 'Import',
+                refEmpty: 'No references imported yet. / 尚未匯入任何參考資料。',
+                eyebrowQuestions: 'Implementation Notes',
+                titleQuestions: 'Open Questions',
+                eyebrowAction: 'Finalize Solution',
+                titleAction: 'Submit Feedback or Execute',
+                lblFeedbackInput: 'Implementation Feedback or Custom Commands',
+                phFeedbackInput: 'Provide implementation feedback or click Finalize & Execute to write changes...',
+                btnUpdateProto: 'Update Prototype',
+                btnFinalize: 'Finalize & Execute',
+                consoleTitle: 'System Console & AI Output',
+                processing: 'Processing...',
+                consoleReady: 'Ready. Waiting for user interaction...',
+                copied: 'Copied'
+            },
+            zh: {
+                brandSpan: '工作流',
+                navCreate: '1. 建立',
+                navSpec: '2. 規格',
+                navPrototype: '3. 原型',
+                modelLoading: '載入模型中...',
+                protoTitle: '原型與架構階段',
+                protoDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認規格，並點擊「產生原型」。',
+                btnGoBack: '前往「規格」分頁',
+                titleCompleted: '任務執行成功且已完成',
+                descCompleted: 'Agent 已經成功套用程式變更，並將最終程式碼寫入工作區中。',
+                eyebrowSummary: '執行總結',
+                titleSummary: '實作架構詳細說明',
+                eyebrowFiles: '已寫入檔案',
+                titleFiles: '新建/修改的檔案清單',
+                eyebrowVerify: '測試驗證',
+                titleVerify: '自動化測試與驗證日誌',
+                btnRestart: '啟動全新任務',
+                eyebrowTree: '架構結構清單',
+                titleTree: '預期專案檔案異動清單',
+                eyebrowWorkflow: '解決方案流程步驟',
+                titleWorkflow: '了解原型運行流程與步驟',
+                titleSnippets: '核心實作程式碼片段',
+                btnAddSnippet: '+ 新增檔案程式碼',
+                btnCopyProto: '複製原型 (Markdown 格式)',
+                btnExportProto: '匯出原型 (Markdown 格式)',
+                eyebrowReferences: '參考資料匯入',
+                lblReferences: '匯入外部程式碼或本地參考文件',
+                btnAddRef: '匯入',
+                refEmpty: '尚未匯入任何參考資料。',
+                eyebrowQuestions: '實作考量細節',
+                titleQuestions: '原型階段待確認問題',
+                eyebrowAction: '最終確認與寫入執行',
+                titleAction: '提交反饋或執行程式寫入',
+                lblFeedbackInput: '實作反饋、細節調整指令或特殊修改',
+                phFeedbackInput: '請在此輸入您的修改反饋，或直接點擊「確認並執行」將上述程式碼與架構套用至工作區...',
+                btnUpdateProto: '更新原型與程式碼',
+                btnFinalize: '確認並執行寫入',
+                consoleTitle: '系統終端與 AI 輸出',
+                processing: '處理中...',
+                consoleReady: '就緒。等待使用者操作...',
+                copied: '已複製'
+            }
+        };
+
+        let activeReferences = [];
+
+        function renderReferences() {
+            const container = document.getElementById('referencesList');
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (activeReferences.length === 0) {
+                const dict = i18n[localStorage.getItem('app_lang') || 'en'];
+                container.innerHTML = `<div style="color:var(--gray-500); font-size:0.8125rem;">${dict['refEmpty'] || 'No references imported yet.'}</div>`;
+                return;
+            }
+            
+            activeReferences.forEach((ref, idx) => {
+                const item = document.createElement('div');
+                item.className = 'ref-item';
+                
+                const typeClass = ref.type === 'local' ? 'local' : 'url';
+                const typeLabel = ref.type === 'local' ? 'Local' : 'URL';
+                
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; flex:1; min-width:0;">
+                        <span class="ref-item-tag ${typeClass}">${typeLabel}</span>
+                        <span class="ref-item-value">${ref.value}</span>
+                    </div>
+                    <button type="button" class="ref-btn-delete" onclick="removeReference(${idx})">Remove</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function generatePrototypeMarkdownText() {
+            const file_tree = gatherFiles();
+            const workflow_steps = gatherSteps();
+            const code_snippets = gatherSnippets();
+            
+            const titleElement = document.getElementById('metaTitle');
+            const categoryElement = document.getElementById('metaCategory');
+            const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
+            const category = categoryElement && categoryElement.textContent !== 'None' ? categoryElement.textContent : 'Feature';
+            
+            let markdown = `# Task Prototype: ${title}\n\n- **Category:** ${category}\n\n`;
+            
+            markdown += `## Architecture Tree\n`;
+            if (file_tree.length > 0) {
+                file_tree.forEach(f => {
+                    markdown += `- [${f.status.toUpperCase()}] ${f.path}\n`;
+                });
+            } else {
+                markdown += `No files proposed.\n`;
+            }
+            markdown += `\n`;
+            
+            markdown += `## Solution Steps\n`;
+            if (workflow_steps.length > 0) {
+                workflow_steps.forEach((s, idx) => {
+                    markdown += `${idx + 1}. ${s}\n`;
+                });
+            } else {
+                markdown += `No steps proposed.\n`;
+            }
+            markdown += `\n`;
+            
+            markdown += `## Code Snippets\n`;
+            if (code_snippets.length > 0) {
+                code_snippets.forEach(s => {
+                    markdown += `### ${s.filename}\n\`\`\`${s.language}\n${s.code}\n\`\`\`\n\n`;
+                });
+            } else {
+                markdown += `No code snippets proposed.\n`;
+            }
+            return markdown;
+        }
+
+        function copyPrototypeMarkdown() {
+            const markdown = generatePrototypeMarkdownText();
+            const btn = document.getElementById('btn-copy-proto');
+            navigator.clipboard.writeText(markdown).then(() => {
+                const originalText = btn.textContent;
+                const dict = i18n[localStorage.getItem('app_lang') || 'en'];
+                btn.textContent = dict['copied'] || 'Copied';
+                setTimeout(() => btn.textContent = originalText, 2000);
+            });
+        }
+
+        function exportPrototypeMarkdown() {
+            const md = generatePrototypeMarkdownText();
+            const titleElement = document.getElementById('metaTitle');
+            const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
+            const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
+            const filename = `${safeTitle}_prototype.md`;
+            
+            const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function addReference() {
+            const type = document.getElementById('refType').value;
+            const valueEl = document.getElementById('refInput');
+            const value = valueEl.value.trim();
+            
+            if (!value) return;
+            
+            activeReferences.push({ type, value });
+            valueEl.value = '';
+            renderReferences();
+        }
+
+        function removeReference(idx) {
+            activeReferences.splice(idx, 1);
+            renderReferences();
+        }
+
+        function changeLanguage() {
+            const lang = document.getElementById('langSelect').value;
+            localStorage.setItem('app_lang', lang);
+            applyLanguage(lang);
+            renderReferences();
+        }
+
+        function applyLanguage(lang) {
+            const dict = i18n[lang] || i18n['en'];
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[key]) el.textContent = dict[key];
+            });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+                const key = el.getAttribute('data-i18n-ph');
+                if (dict[key]) el.placeholder = dict[key];
+            });
+            
+            const modelSelect = document.getElementById('globalModelSelect');
+            if (modelSelect && modelSelect.options.length > 0 && modelSelect.options[0].getAttribute('data-i18n') === 'modelLoading') {
+                modelSelect.options[0].textContent = dict['modelLoading'];
+            }
+        }
+
+        function logDebug(message) {
+            const pre = document.getElementById('globalDebug');
+            if (pre) pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
+        }
+
+        function setLoading(isLoading, btnId) {
+            const indicator = document.getElementById('loading-indicator');
+            if (indicator) indicator.style.display = isLoading ? 'flex' : 'none';
+            const btn = document.getElementById(btnId);
+            if (btn) btn.disabled = isLoading;
+            const otherBtn = (btnId === 'btn-update-proto') ? 'btn-finalize' : 'btn-update-proto';
+            const otherEl = document.getElementById(otherBtn);
+            if (otherEl) otherEl.disabled = isLoading;
+        }
+
+        // Dynamic visual list for file tree
+        function addFileRow(path = '', status = 'new') {
+            const container = document.getElementById('filesContainer');
+            const row = document.createElement('div');
+            row.className = 'list-row file-row';
+            
+            row.innerHTML = `
+                <input type="text" class="file-path-input" value="${path}" placeholder="e.g. src/main.py" style="flex: 1; font-family: var(--mono); font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-height: 38px;">
+                <select class="file-status-select" style="width: auto; font-family: var(--mono); font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-height: 38px;">
+                    <option value="new" ${status === 'new' ? 'selected' : ''}>[NEW]</option>
+                    <option value="modified" ${status === 'modified' ? 'selected' : ''}>[MODIFY]</option>
+                    <option value="deleted" ${status === 'deleted' ? 'selected' : ''}>[DELETE]</option>
+                </select>
+                <button type="button" class="btn-action-small" onclick="this.closest('.file-row').remove()" style="min-height: 38px; padding: 0.4rem 0.8rem;">[x]</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function gatherFiles() {
+            const files = [];
+            document.querySelectorAll('.file-row').forEach(row => {
+                const path = row.querySelector('.file-path-input').value.trim();
+                const status = row.querySelector('.file-status-select').value;
+                if (path) {
+                    files.push({ path, status });
+                }
+            });
+            return files;
+        }
+
+        // Dynamic visual list for workflow steps
+        function addStepRow(content = '') {
+            const container = document.getElementById('stepsContainer');
+            const stepNum = container.children.length + 1;
+            const row = document.createElement('div');
+            row.className = 'list-row step-row';
+            
+            row.innerHTML = `
+                <span class="eyebrow" style="margin: 0; min-width: 50px;">Step ${stepNum}</span>
+                <textarea class="list-textarea step-textarea" rows="2" placeholder="Describe step details..." style="min-height: 42px;">${content}</textarea>
+                <button type="button" class="btn-action-small" onclick="this.closest('.step-row').remove(); reindexSteps();" style="min-height: 42px; padding: 0.5rem 0.75rem;">[x]</button>
+            `;
+            container.appendChild(row);
+            const ta = row.querySelector('.step-textarea');
+            if (content) {
+                setTimeout(() => autoResizeTextarea(ta), 0);
+            }
+        }
+
+        function reindexSteps() {
+            const container = document.getElementById('stepsContainer');
+            Array.from(container.children).forEach((row, idx) => {
+                row.querySelector('.eyebrow').textContent = `Step ${idx + 1}`;
+            });
+        }
+
+        function gatherSteps() {
+            const steps = [];
+            document.querySelectorAll('.step-textarea').forEach(ta => {
+                const val = ta.value.trim();
+                if (val) steps.push(val);
+            });
+            return steps;
+        }
+
+        // Dynamic visual cards for code snippets
+        function addSnippetCard(filename = '', language = 'python', code = '') {
+            const container = document.getElementById('snippetsContainer');
+            const card = document.createElement('div');
+            card.className = 'card snippet-card';
+            card.style.padding = '1.5rem';
+            card.style.marginBottom = '1.5rem';
+            
+            card.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="flex: 1; margin-right: 1rem;">
+                        <label style="margin-bottom: 0.25rem; font-family: var(--mono); font-size: 0.75rem; text-transform: uppercase; color: var(--gray-500);">File Path / 檔案路徑</label>
+                        <input type="text" class="snippet-filename" value="${filename}" placeholder="e.g. src/main.py" style="width: 100%; padding: 0.4rem; font-family: var(--mono); font-size: 0.8125rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-height: 38px;">
+                    </div>
+                    <input type="hidden" class="snippet-lang" value="${language}">
+                    <div style="display:flex; gap:0.5rem; margin-top: 1.2rem;">
+                        <button type="button" class="btn btn-secondary btn-collapse" onclick="toggleCollapse(this.closest('.snippet-card'))" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; min-height: 38px;">-</button>
+                        <button type="button" class="btn btn-secondary" onclick="this.closest('.snippet-card').remove()" style="padding: 0.4rem 0.8rem; font-size: 0.75rem; border-color: var(--rust); color: var(--rust); min-height: 38px;">Remove</button>
+                    </div>
+                </div>
+                <div class="collapsible-content">
+                    <textarea class="code-editor" style="font-family: var(--mono); font-size: 0.8125rem; min-height: 250px; background-color: var(--gray-50); color: var(--slate); border-color: var(--gray-200); width: 100%; padding: 0.75rem; border-radius: 6px; resize: none; overflow: hidden;" placeholder="Write your code snippet here...">${code}</textarea>
+                </div>
+            `;
+            container.appendChild(card);
+            const ta = card.querySelector('.code-editor');
+            if (code) {
+                setTimeout(() => autoResizeTextarea(ta), 0);
+            }
+        }
+
+        function gatherSnippets() {
+            const list = [];
+            const elements = document.querySelectorAll('.snippet-card');
+            elements.forEach(card => {
+                const filename = card.querySelector('.snippet-filename').value.trim();
+                const language = card.querySelector('.snippet-lang').value;
+                const code = card.querySelector('.code-editor').value;
+                if (filename) {
+                    list.push({ filename, language, code });
+                }
+            });
+            return list;
+        }
+
+        function toggleCollapse(card) {
+            const content = card.querySelector('.collapsible-content');
+            const btn = card.querySelector('.btn-collapse');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                btn.textContent = '-';
+            } else {
+                content.style.display = 'none';
+                btn.textContent = '+';
+            }
+        }
+
+        function autoResizeTextarea(el) {
+            el.style.height = 'auto';
+            el.style.height = (el.scrollHeight) + 'px';
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target.tagName.toLowerCase() === 'textarea') {
+                autoResizeTextarea(e.target);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const savedLang = localStorage.getItem('app_lang') || 'en';
+            const langSelect = document.getElementById('langSelect');
+            if (langSelect) langSelect.value = savedLang;
+            applyLanguage(savedLang);
+
+            // Restore saved workspace path from localStorage if present
+            const savedWorkspacePath = localStorage.getItem('workspace_path');
+            const wsPathInput = document.getElementById('workspacePath');
+            if (wsPathInput) {
+                if (savedWorkspacePath) {
+                    wsPathInput.value = savedWorkspacePath;
+                }
+                wsPathInput.addEventListener('input', () => {
+                    localStorage.setItem('workspace_path', wsPathInput.value.trim());
+                });
+            }
+
+            // Fetch active state
+            try {
+                const stateRes = await fetch('/api/state');
+                const data = await stateRes.json();
+                if (data.status === 'success') {
+                    const state = data.state;
+                    
+                    // Render meta summary
+                    if (state.create_data && state.create_data.title) {
+                        document.getElementById('metaTitle').textContent = state.create_data.title;
+                        document.getElementById('metaCategory').textContent = state.create_data.category;
+                        if (state.create_data.goal) {
+                            document.getElementById('metaGoal').innerHTML = marked.parse(state.create_data.goal);
+                        } else {
+                            document.getElementById('metaGoal').textContent = "None";
+                        }
+                    }
+                    
+                    // Pre-fill references list
+                    if (state.references) {
+                        activeReferences = state.references;
+                    }
+                    renderReferences();
+                    
+                    if (state.current_stage === 'completed') {
+                        // Render Completed View Dashboard (clean list items, no markdown)
+                        document.getElementById('view-completed').style.display = 'block';
+                        
+                        const summaryContainer = document.getElementById('completedSummaryList');
+                        summaryContainer.innerHTML = '';
+                        state.completed_data.summary_items.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'completed-list-item';
+                            div.textContent = item;
+                            summaryContainer.appendChild(div);
+                        });
+                        
+                        const fileContainer = document.getElementById('completedFiles');
+                        fileContainer.innerHTML = '';
+                        state.completed_data.created_files.forEach(f => {
+                            const item = document.createElement('div');
+                            item.textContent = `[Written] ${f}`;
+                            fileContainer.appendChild(item);
+                        });
+                        
+                        const verifyContainer = document.getElementById('completedVerifyList');
+                        verifyContainer.innerHTML = '';
+                        state.completed_data.verification_results.forEach(res => {
+                            const item = document.createElement('div');
+                            item.textContent = `> ${res}`;
+                            verifyContainer.appendChild(item);
+                        });
+                        
+                    } else if (state.prototype_data && state.prototype_data.workflow_steps && state.prototype_data.workflow_steps.length > 0) {
+                        // Render Main Editor View
+                        document.getElementById('view-main').style.display = 'grid';
+                        
+                        // Render File tree structured items
+                        const files = state.prototype_data.file_tree || [];
+                        const fContainer = document.getElementById('filesContainer');
+                        fContainer.innerHTML = '';
+                        if (files.length > 0) {
+                            files.forEach(f => addFileRow(f.path, f.status));
+                        } else {
+                            addFileRow('', 'new');
+                        }
+                        
+                        // Render Workflow steps structured items
+                        const steps = state.prototype_data.workflow_steps || [];
+                        const sContainer = document.getElementById('stepsContainer');
+                        sContainer.innerHTML = '';
+                        if (steps.length > 0) {
+                            steps.forEach(s => addStepRow(s));
+                        } else {
+                            addStepRow('');
+                        }
+                        
+                        // Render Code Snippets dynamic cards
+                        const snippets = state.prototype_data.code_snippets || [];
+                        const snContainer = document.getElementById('snippetsContainer');
+                        snContainer.innerHTML = '';
+                        snippets.forEach(s => addSnippetCard(s.filename, s.language, s.code));
+                        
+                        // Render open questions
+                        const qContainer = document.getElementById('questionsContainer');
+                        qContainer.innerHTML = '';
+                        const questions = state.prototype_data.open_questions || [];
+                        if (questions.length > 0) {
+                            questions.forEach((q, idx) => {
+                                const qCard = document.createElement('div');
+                                qCard.className = 'question-card';
+                                qCard.innerHTML = `
+                                    <div class="question-label">[Question / 問題 ${idx + 1}] ${q}</div>
+                                `;
+                                qContainer.appendChild(qCard);
+                            });
+                        } else {
+                            qContainer.innerHTML = '<div style="color:var(--gray-500); font-size:0.875rem;">No open questions active. / 目前無待確認問題。</div>';
+                        }
+                    } else {
+                        // Render Placeholder
+                        document.getElementById('view-placeholder').style.display = 'block';
+                    }
+                    setTimeout(() => {
+                        document.querySelectorAll('textarea').forEach(autoResizeTextarea);
+                    }, 50);
+                }
+            } catch (err) {
+                console.error('Could not fetch state', err);
+                logDebug('ERROR: Could not load active workflow state.');
+            }
+
+            // Fetch models
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const select = document.getElementById('globalModelSelect');
+                    select.innerHTML = '';
+                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        if (model === defaultModel) option.selected = true;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (err) {
+                console.error('Could not load models', err);
+            }
+        });
+
+        async function handleAgentCall(isUpdate) {
+            const btnId = isUpdate ? 'btn-update-proto' : 'btn-finalize';
+            setLoading(true, btnId);
+
+            const file_tree = gatherFiles();
+            const workflow_steps = gatherSteps();
+            const code_snippets = gatherSnippets();
+            const feedback_input = document.getElementById('feedbackInput').value;
+            const workspace_path = document.getElementById('workspacePath') ? document.getElementById('workspacePath').value.trim() : './';
+            localStorage.setItem('workspace_path', workspace_path);
+            const modelSelect = document.getElementById('globalModelSelect');
+            
+            const payload = {
+                command: 'task-prototype',
+                data: {
+                    is_update: isUpdate,
+                    file_tree: file_tree,
+                    workflow_steps: workflow_steps,
+                    code_snippets: code_snippets,
+                    feedback_input: feedback_input,
+                    workspace_path: workspace_path,
+                    references: activeReferences,
+                    language: localStorage.getItem('app_lang') || 'en',
+                    model: modelSelect ? modelSelect.value : 'gemini-3.1-flash-lite'
+                }
+            };
+
+            logDebug(`Sending 'task-prototype' request (is_update=${isUpdate}) using model ${payload.data.model}...`);
+
+            try {
+                const res = await fetch('/api/agent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    logDebug(`SUCCESS (task-prototype):\n` + result.response);
+                    logDebug(`Reloading page in 1.2 seconds to view updated solution...`);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1200);
+                } else {
+                    logDebug(`ERROR (task-prototype):\n` + (result.message || 'Unknown error'));
+                }
+            } catch (err) {
+                logDebug(`NETWORK ERROR (task-prototype):\n` + err.message);
+            } finally {
+                setLoading(false, btnId);
+            }
+        }
+    </script>
+</body>
+</html>
