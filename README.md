@@ -33,8 +33,17 @@ A centralized repository for managing rules, skills, and workflows across multip
 
 ### PowerShell (Windows)
 ```powershell
-# Antigravity (Workspace only)
+# Antigravity CLI Plugin (Global)
+.\install.ps1 -Agent antigravity -Scope global
+
+# Antigravity IDE Plugin (Global)
+.\install.ps1 -Agent antigravity-ide -Scope global
+
+# Antigravity Plugin (Workspace scope with legacy fallback)
 .\install.ps1 -Agent antigravity -Scope workspace
+
+# Specifying a custom plugin name
+.\install.ps1 -Agent antigravity -Scope global -PluginName "my-custom-plugin"
 
 # Copilot (Global)
 .\install.ps1 -Agent copilot -Scope global
@@ -42,8 +51,17 @@ A centralized repository for managing rules, skills, and workflows across multip
 
 ### Bash (Linux/macOS)
 ```bash
-# Antigravity (Workspace only)
+# Antigravity CLI Plugin (Global)
+./install.sh antigravity global
+
+# Antigravity IDE Plugin (Global)
+./install.sh antigravity-ide global
+
+# Antigravity Plugin (Workspace scope with legacy fallback)
 ./install.sh antigravity workspace
+
+# Specifying a custom plugin name
+./install.sh antigravity global --plugin-name=my-custom-plugin
 
 # Claude (Global)
 ./install.sh claude global

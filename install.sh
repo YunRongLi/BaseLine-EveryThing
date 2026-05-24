@@ -3,28 +3,32 @@
 AGENT="antigravity"
 SCOPE="global"
 RULES="all"
+PLUGIN_NAME="baseline-everything"
 
 # Parse arguments
 while [ $# -gt 0 ]; do
     case $1 in
-        antigravity|copilot|claude) AGENT="$1" ;;
+        antigravity|antigravity-ide|copilot|claude) AGENT="$1" ;;
         global|workspace) SCOPE="$1" ;;
         --rule=*|--rules=*) RULES="${1#*=}" ;;
         --rule|--rules) RULES="$2"; shift ;;
         --path=*) TARGET_PATH="${1#*=}" ;;
         --path) TARGET_PATH="$2"; shift ;;
+        --plugin-name=*) PLUGIN_NAME="${1#*=}" ;;
+        --plugin-name) PLUGIN_NAME="$2"; shift ;;
         -h|--help)
             echo "Usage: ./install.sh [AGENT] [SCOPE] [OPTIONS]"
             echo ""
             echo "Installs AI Agent rules, skills, and workflows from the current directory."
             echo ""
             echo "Arguments:"
-            echo "  AGENT             Which agent format to target: antigravity (default), copilot, or claude."
+            echo "  AGENT             Which agent format to target: antigravity, antigravity-ide, copilot, or claude (default: antigravity)."
             echo "  SCOPE             Installation scope: global (default) or workspace."
             echo ""
             echo "Options:"
             echo "  --rules=<rules>   Comma-separated list of rule names to install. Defaults to 'all'."
             echo "  --path=<path>     Specific location to install into when SCOPE is workspace."
+            echo "  --plugin-name=<n> Name of the plugin bundle (default: baseline-everything)."
             echo "  -h, --help        Show this help message and exit."
             exit 0
             ;;
@@ -41,47 +45,69 @@ if [ "$SCOPE" = "workspace" ]; then
     fi
 
     case $AGENT in
-        antigravity)
-            BASE_DIR="${PREFIX}.agents"
+        antigravity|antigravity-ide)
+            BASE_DIR="${PREFIX}.agents/plugins/$PLUGIN_NAME"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
+            LEGACY_RULES="${PREFIX}.agents/rules"
+            LEGACY_SKILLS="${PREFIX}.agents/skills"
+            LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
             ;;
         copilot)
             BASE_DIR="${PREFIX}.github"
             TARGET_RULES="$BASE_DIR"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
         claude)
             BASE_DIR="${PREFIX}.claude"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
     esac
     echo "[Building] Installing for $AGENT into Workspace: $BASE_DIR"
 else
     case $AGENT in
         antigravity)
-            BASE_DIR="$HOME/.antigravity"
+            BASE_DIR="$HOME/.gemini/antigravity-cli/plugins/$PLUGIN_NAME"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
+            ;;
+        antigravity-ide)
+            BASE_DIR="$HOME/.gemini/antigravity-ide/plugins/$PLUGIN_NAME"
+            TARGET_RULES="$BASE_DIR/rules"
+            TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
         copilot)
             BASE_DIR="$HOME/.copilot"
             TARGET_RULES="$BASE_DIR"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
         claude)
             BASE_DIR="$HOME/.claude"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
     esac
     echo "[Global] Installing for $AGENT into Global: $BASE_DIR"
 fi
 
 # Create target directories
+mkdir -p "$BASE_DIR"
 mkdir -p "$TARGET_RULES"
 mkdir -p "$TARGET_SKILLS"
+mkdir -p "$TARGET_WORKFLOWS"
+if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+    mkdir -p "$LEGACY_RULES"
+    mkdir -p "$LEGACY_SKILLS"
+    mkdir -p "$LEGACY_WORKFLOWS"
+fi
 
 # Install Rules
 if [ -d "rules" ]; then
@@ -92,7 +118,7 @@ if [ -d "rules" ]; then
         local file_name="${1##*/}"
         local base_name="${file_name%.*}"
         
-        if [ "$AGENT" != "antigravity" ] && [ "$file_name" = "GEMINI.md" ]; then
+        if [ "$AGENT" != "antigravity" ] && [ "$AGENT" != "antigravity-ide" ] && [ "$file_name" = "GEMINI.md" ]; then
             return 1
         fi
         
@@ -112,6 +138,9 @@ if [ -d "rules" ]; then
     find rules -type f -name "*.md" | while read -r rule_file; do
         if should_copy_rule "$rule_file"; then
             cp "$rule_file" "$TARGET_RULES/" 2>/dev/null || true
+            if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+                cp "$rule_file" "$LEGACY_RULES/" 2>/dev/null || true
+            fi
         fi
     done
     
@@ -124,20 +153,45 @@ fi
 if [ -d "skills" ]; then
     echo "[Packaging] Copying skills from ./skills to $TARGET_SKILLS..."
     cp -r skills/* "$TARGET_SKILLS/" 2>/dev/null || true
+    if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+        cp -r skills/* "$LEGACY_SKILLS/" 2>/dev/null || true
+    fi
     echo "[OK] Skills installed."
 else
     echo "[Info] No ./skills directory found."
 fi
 
 # Install Workflows
-TARGET_WORKFLOWS="$BASE_DIR/workflows"
 if [ -d "workflows" ]; then
-    mkdir -p "$TARGET_WORKFLOWS"
     echo "[Packaging] Copying workflows from ./workflows to $TARGET_WORKFLOWS..."
     cp -r workflows/* "$TARGET_WORKFLOWS/" 2>/dev/null || true
+    if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+        cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
+    fi
     echo "[OK] Workflows installed."
 else
     echo "[Info] No ./workflows directory found."
+fi
+
+# Generate/Copy Plugin Manifests for Antigravity Agents
+if [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; then
+    if [ -f "plugin.json" ]; then
+        cp "plugin.json" "$BASE_DIR/" 2>/dev/null || true
+    else
+        cat <<EOF > "$BASE_DIR/plugin.json"
+{
+  "name": "$PLUGIN_NAME",
+  "version": "2.0.0",
+  "description": "Centralized rules, skills, and workflows for Antigravity"
+}
+EOF
+    fi
+    if [ -f "mcp_config.json" ]; then
+        cp "mcp_config.json" "$BASE_DIR/" 2>/dev/null || true
+    fi
+    if [ -f "hooks.json" ]; then
+        cp "hooks.json" "$BASE_DIR/" 2>/dev/null || true
+    fi
 fi
 
 echo "Done! $AGENT is now configured ($SCOPE scope)."

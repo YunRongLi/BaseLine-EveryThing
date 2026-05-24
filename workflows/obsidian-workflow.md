@@ -18,14 +18,14 @@ Ensure `obsidian-cli` is installed and the Obsidian application is running.
 ### 2.1. Processing the Inbox
 1. **Command**: `/obsidian process-inbox`
 2. **AI Action**: 
-   - Scans the `Inbox/` directory.
-   - For each file, runs: `obsidian create name="target_name.md" path="target/folder" content="processed content"`.
+   - Scans the `00_Inbox/` directory.
+   - For each file, runs: `obsidian create name="target_name.md" path="01_Atlas/Notes" content="processed content"`.
    - Cleans up the inbox after confirmation.
 
 ### 2.2. Dynamic Note Creation
 To save current session insights:
 1. **Instruction**: "AI, save this summary to Obsidian."
-2. **CLI Call**: `obsidian create name="Current_Task.md" path="10_Projects" content="# Summary\n..." overwrite`
+2. **CLI Call**: `obsidian create name="Current_Task.md" path="Efforts/Projects" content="# Summary\n..." overwrite`
 3. **Best Practice**: Use `obsidian open file="Current_Task.md"` to show the result to the user immediately.
 
 ### 2.3. Appending to Daily Notes or Logs
@@ -42,5 +42,5 @@ To sync code TODOs:
 - **No Icons**: Strictly follow the project override; avoid emojis in CLI-generated titles or content.
 - **Vault Targeting**: If multiple vaults exist, always specify `vault="VaultName"`.
 - **Formatting**: Ensure content passed to CLI is properly escaped for shell execution. Use key=value pairs (e.g., `name="note.md"`, `content="text"`).
-- **PARA Consistency**: Use the PARA folder structure within all `obsidian create` path arguments.
+- **ACE Consistency**: Use the ACE (Atlas, Calendar, Efforts) and 00_Inbox folder framework within all `obsidian create` path arguments.
 - **Safety**: AI MUST ask for explicit user confirmation before executing any `delete` command.
