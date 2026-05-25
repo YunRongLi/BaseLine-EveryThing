@@ -4,6 +4,7 @@ from utils import resolve_references
 from search_tools import interactive_search
 from recursive_search import perform_local_recursive_search
 from config import check_api_key, check_api_key_anthropic, check_api_key_gemini
+from patch_tools import apply_patch
 
 async def call_claude_async(model_name, prompt):
     import httpx
@@ -321,7 +322,7 @@ You MUST respond ONLY with a JSON block in this schema:
 
             config_kwargs = {
                 "temperature": 0.0,
-                "tools": [interactive_search, perform_local_recursive_search]
+                "tools": [interactive_search, perform_local_recursive_search, apply_patch]
             }
             if thinking_level:
                 config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_level=thinking_level)
@@ -341,7 +342,7 @@ You MUST respond ONLY with a JSON block in this schema:
                         model="gemini-2.5-pro",
                         config=types.GenerateContentConfig(
                             temperature=0.0,
-                            tools=[interactive_search, perform_local_recursive_search]
+                            tools=[interactive_search, perform_local_recursive_search, apply_patch]
                         )
                     )
                     fallback_response = await chat_fallback.send_message(prompt)
