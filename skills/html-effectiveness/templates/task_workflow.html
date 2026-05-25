@@ -329,6 +329,7 @@
             <button id="nav-create" class="nav-link" onclick="switchView('create')" data-i18n="navCreate">1. Create</button>
             <button id="nav-spec" class="nav-link" onclick="switchView('spec')" data-i18n="navSpec">2. Spec</button>
             <button id="nav-prototype" class="nav-link" onclick="switchView('prototype')" data-i18n="navPrototype">3. Prototype</button>
+            <button id="nav-testing" class="nav-link" onclick="switchView('testing')" data-i18n="navTesting">4. Test & Regression</button>
         </div>
         <div class="nav-right">
             <select id="globalModelSelect" class="model-select">
@@ -395,6 +396,14 @@
             </div>
         </div>
 
+        <!-- 4. TESTING VIEW PLACEHOLDER -->
+        <div id="view-testing" class="view-section" data-empty="true" style="display:none;">
+            <div class="placeholder-card">
+                <h2 data-i18n="testingTitle">Verification & Regression Stage</h2>
+                <p data-i18n="testingDesc">No active testing session has been initialized yet. Please finalize your specifications and click Finalize & Execute inside the Prototyping tab to write code and unlock verification.</p>
+            </div>
+        </div>
+
         <!-- Debug Console -->
         <button class="debug-toggle-btn" onclick="document.querySelector('.debug-console').classList.toggle('open')">Debug</button>
         <div class="debug-console">
@@ -418,6 +427,9 @@
                 navCreate: '1. Create',
                 navSpec: '2. Spec',
                 navPrototype: '3. Prototype',
+                navTesting: '4. Test & Regression',
+                testingTitle: 'Verification & Regression Stage',
+                testingDesc: 'No active testing session has been initialized yet. Please finalize your specifications and click Finalize & Execute inside the Prototyping tab to write code and unlock verification.',
                 modelLoading: 'Loading models...',
                 eyebrowInit: 'Task Initiation',
                 titleCreate: 'Create a New Task',
@@ -449,6 +461,9 @@
                 navCreate: '1. 建立',
                 navSpec: '2. 規格',
                 navPrototype: '3. 原型',
+                navTesting: '4. 測試與回歸',
+                testingTitle: '驗證與回歸階段',
+                testingDesc: '尚未初始化任何測試會話。請先在規格分頁中確認規格，並點擊原型分頁中的「確認並執行」將程式碼寫入工作區，解鎖測試驗證。',
                 modelLoading: '載入模型中...',
                 eyebrowInit: '任務啟動',
                 titleCreate: '建立新任務',
@@ -579,7 +594,7 @@
         });
 
         function switchView(viewName, updateUrl = true) {
-            const sections = ['create', 'spec', 'prototype'];
+            const sections = ['create', 'spec', 'prototype', 'testing'];
             sections.forEach(sec => {
                 const el = document.getElementById('view-' + sec);
                 const btn = document.getElementById('nav-' + sec);
