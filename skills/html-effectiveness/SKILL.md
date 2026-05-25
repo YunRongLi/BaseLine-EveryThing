@@ -19,6 +19,7 @@ When presenting spatial information, timelines, comparisons, visual designs, or 
 - **Single-File Self-Containment:** All HTML, CSS, JavaScript, and SVG assets must be fully inlined. Do not rely on CDNs or external libraries.
 - **Mandatory Export:** Any HTML file that allows user interaction or input must include a "Copy as Markdown" button to export its state.
 - **Desktop Responsive:** The layout must scale beautifully on screens from 1280px laptops up to 1920px external monitors. Mobile responsiveness is not required.
+- **Limit Agent Open Questions:** When generating specifications or prototyping steps, always limit the open questions list strictly to at most three (3) of the most important architectural or functional questions to prevent analysis paralysis.
 
 ### Style & Design Guidelines (Best Practices)
 To produce premium, highly readable HTML artifacts matching reference standards, incorporate these cohesive patterns:
@@ -85,3 +86,10 @@ When the user explicitly issues the `/task-prototype` command:
 2. Implement mock workflows, interactive wireframes, layouts, or simulated logic so the user can visualize and interact with the main features.
 3. Keep the prototype highly interactive to encourage hands-on exploration.
 4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="prototypeFeedback">`) for final implementation/verification feedback. When the user clicks the "Finalize & Execute" button, it sends the input to the `/api/agent` backend under the `task-prototype` command, which directly implements the verified, functional solution in the user's workspace, running tests and updating the prototype tab to display a beautiful completion dashboard.
+
+## 6. Workspace Context Retrieval Tool
+
+To autonomously retrieve context and reference documents, the AI agent is equipped with a heuristic-driven, semantic search capability: `perform_local_recursive_search`.
+
+### 6.1 Core Search Capabilities
+- **Intelligent Path Resolution:** Supports absolute paths, relative paths, and home-directory (`~/`) paths inside search queries, dynamically resolving them against the current repository and workspace tree structure to automatically locate and prioritize the target files.
