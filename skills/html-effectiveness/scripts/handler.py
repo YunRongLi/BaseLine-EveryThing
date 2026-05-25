@@ -10,7 +10,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(path)
         clean_path = parsed.path.lstrip('/')
         
-        if clean_path in ["task_create.html", "task_spec.html", "task_prototype.html", "recursive_search.html"]:
+        if clean_path in ["task_create.html", "task_spec.html", "task_prototype.html", "task_testing.html", "recursive_search.html"]:
             local_path = os.path.abspath(clean_path)
             if os.path.exists(local_path):
                 return local_path
@@ -43,6 +43,13 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "code_snippets": [],
                     "open_questions": []
                 },
+                "testing_data": {
+                    "test_steps": [],
+                    "env_vars": {},
+                    "test_runs": [],
+                    "remediation_instructions": "",
+                    "regression_baseline": []
+                },
                 "completed_data": {
                     "summary_items": [],
                     "created_files": [],
@@ -69,6 +76,8 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/task_spec.html"
         elif clean_path == "prototype":
             self.path = "/task_prototype.html"
+        elif clean_path == "testing":
+            self.path = "/task_testing.html"
             
         if clean_path == 'api/models':
             has_gemini = check_api_key_gemini()
@@ -166,6 +175,13 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "code_snippets": [],
                     "open_questions": []
                 },
+                "testing_data": {
+                    "test_steps": [],
+                    "env_vars": {},
+                    "test_runs": [],
+                    "remediation_instructions": "",
+                    "regression_baseline": []
+                },
                 "completed_data": {
                     "summary_items": [],
                     "created_files": [],
@@ -220,6 +236,84 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 
                 # Make sure the payload contains the complete active references for prompt generation
                 data["references"] = WORKFLOW_STATE["references"]
+                
+                # Pre-execute tests before agent analysis if command is task-regression
+                if command == "task-regression":
+                    print("System (Triage Loop): Executing verification steps before triaging...")
+                    test_steps = WORKFLOW_STATE["testing_data"].get("test_steps", [])
+                    env_vars = WORKFLOW_STATE["testing_data"].get("env_vars", {})
+                    workspace_path = data.get("workspace_path", ".")
+                    cwd = os.path.abspath(workspace_path)
+                    
+                    import subprocess, time
+                    run_env = os.environ.copy()
+                    for k, v in env_vars.items():
+                        run_env[str(k)] = str(v)
+                        
+                    aggregated_logs = []
+                    
+                    if not test_steps:
+                        # Guess default test command based on workspace file structures
+                        default_cmd = "pytest"
+                        for snippet in WORKFLOW_STATE["prototype_data"].get("code_snippets", []):
+                            filename = snippet.get("filename", "")
+                            if filename.endswith(".js") or filename.endswith(".ts"):
+                                default_cmd = "npm test"
+                                break
+                            elif filename.endswith(".rs"):
+                                default_cmd = "cargo test"
+                                break
+                        test_steps = [{"id": 1, "cmd": default_cmd, "desc": "Default verification"}]
+                        WORKFLOW_STATE["testing_data"]["test_steps"] = test_steps
+                    
+                    for step in test_steps:
+                        cmd = step.get("cmd")
+                        if cmd:
+                            print(f"System (Triage Loop): Executing command '{cmd}' in {cwd}...")
+                            start_time = time.time()
+                            try:
+                                result = subprocess.run(
+                                    cmd,
+                                    shell=True,
+                                    capture_output=True,
+                                    text=True,
+                                    cwd=cwd,
+                                    env=run_env,
+                                    timeout=30
+                                )
+                                duration = time.time() - start_time
+                                status = "pass" if result.returncode == 0 else "fail"
+                                step_logs = (result.stdout or "") + "\n" + (result.stderr or "")
+                                returncode = result.returncode
+                            except subprocess.TimeoutExpired as te:
+                                duration = 30.0
+                                status = "fail"
+                                step_logs = f"Timeout Expired: Command timed out after 30 seconds.\n{te.stdout or ''}\n{te.stderr or ''}"
+                                returncode = -1
+                            except Exception as e:
+                                duration = 0.0
+                                status = "fail"
+                                step_logs = f"Execution Error: {str(e)}"
+                                returncode = -2
+                                
+                            test_run_entry = {
+                                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "cmd": cmd,
+                                "status": status,
+                                "logs": step_logs,
+                                "duration_sec": round(duration, 2),
+                                "returncode": returncode
+                            }
+                            
+                            if "test_runs" not in WORKFLOW_STATE["testing_data"]:
+                                WORKFLOW_STATE["testing_data"]["test_runs"] = []
+                            WORKFLOW_STATE["testing_data"]["test_runs"].insert(0, test_run_entry)
+                            
+                            aggregated_logs.append(f"STEP: {step.get('desc')} ({cmd})\nSTATUS: {status.upper()}\nLOGS:\n{step_logs}\n=====================")
+                    
+                    data["test_logs"] = "\n".join(aggregated_logs)
+                    data["env_vars"] = env_vars
+                    data["test_steps"] = test_steps
                 
                 # Execute agent call
                 response_text = asyncio.run(call_agent_async(command, data))
@@ -301,7 +395,22 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                                 "created_files": completed_info.get("created_files", []),
                                 "verification_results": completed_info.get("verification_results", [])
                             }
-                            WORKFLOW_STATE["current_stage"] = "completed"
+                            WORKFLOW_STATE["current_stage"] = "testing"
+                            
+                            # Guess default test command based on created files
+                            default_cmd = "pytest"
+                            for f in completed_info.get("created_files", []):
+                                if f.endswith(".js") or f.endswith(".ts"):
+                                    default_cmd = "npm test"
+                                    break
+                                elif f.endswith(".rs"):
+                                    default_cmd = "cargo test"
+                                    break
+                            
+                            if not WORKFLOW_STATE["testing_data"]["test_steps"]:
+                                WORKFLOW_STATE["testing_data"]["test_steps"] = [
+                                    {"id": 1, "cmd": default_cmd, "desc": "Execute test suite"}
+                                ]
                             
                             # Write approved files into workspace
                             try:
@@ -321,6 +430,100 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                                             print(f"System: Automatically wrote {filename} to {base_workspace}")
                             except Exception as exec_err:
                                 print(f"Error executing final workspace changes: {exec_err}")
+                            
+                    elif command == "task-regression":
+                        testing_info = parsed_response.get("testing", {})
+                        if "remediation_instructions" not in WORKFLOW_STATE["testing_data"]:
+                            WORKFLOW_STATE["testing_data"]["remediation_instructions"] = ""
+                        WORKFLOW_STATE["testing_data"]["remediation_instructions"] = data.get("feedback_input", "")
+                        
+                        # Apply patches/updates to the workspace returned by the agent
+                        applied_snippets = []
+                        try:
+                            code_snippets = parsed_response.get("code_snippets", [])
+                            workspace_path = data.get("workspace_path", ".")
+                            base_workspace = os.path.abspath(workspace_path)
+                            for snippet in code_snippets:
+                                filename = snippet.get("filename")
+                                code = snippet.get("code")
+                                if filename and code:
+                                    clean_filename = filename.lstrip('/\\')
+                                    filepath = os.path.abspath(os.path.join(base_workspace, clean_filename))
+                                    if filepath.startswith(base_workspace):
+                                        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+                                        with open(filepath, 'w', encoding='utf-8') as f:
+                                            f.write(code)
+                                        print(f"System (Regression Fix): Automatically wrote {filename} to {base_workspace}")
+                                        applied_snippets.append(snippet)
+                                        
+                            # Proactively update prototype snippet memory with correct code as well
+                            if applied_snippets:
+                                if "code_snippets" not in WORKFLOW_STATE["prototype_data"]:
+                                    WORKFLOW_STATE["prototype_data"]["code_snippets"] = []
+                                for app_sn in applied_snippets:
+                                    existing = next((s for s in WORKFLOW_STATE["prototype_data"]["code_snippets"] if s["filename"] == app_sn["filename"]), None)
+                                    if existing:
+                                        existing["code"] = app_sn["code"]
+                                    else:
+                                        WORKFLOW_STATE["prototype_data"]["code_snippets"].append(app_sn)
+                        except Exception as exec_err:
+                            print(f"Error executing regression workspace changes: {exec_err}")
+                            
+                        # Run verification steps again after applying the agent's fixes
+                        print("System (Post-Fix Verification): Re-running verification steps after applying fixes...")
+                        test_steps = WORKFLOW_STATE["testing_data"].get("test_steps", [])
+                        env_vars = WORKFLOW_STATE["testing_data"].get("env_vars", {})
+                        workspace_path = data.get("workspace_path", ".")
+                        cwd = os.path.abspath(workspace_path)
+                        
+                        import subprocess, time
+                        run_env = os.environ.copy()
+                        for k, v in env_vars.items():
+                            run_env[str(k)] = str(v)
+                            
+                        for step in test_steps:
+                            cmd = step.get("cmd")
+                            if cmd:
+                                print(f"System (Post-Fix Verification): Executing command '{cmd}' in {cwd}...")
+                                start_time = time.time()
+                                try:
+                                    result = subprocess.run(
+                                        cmd,
+                                        shell=True,
+                                        capture_output=True,
+                                        text=True,
+                                        cwd=cwd,
+                                        env=run_env,
+                                        timeout=30
+                                    )
+                                    duration = time.time() - start_time
+                                    status = "pass" if result.returncode == 0 else "fail"
+                                    step_logs = (result.stdout or "") + "\n" + (result.stderr or "")
+                                    returncode = result.returncode
+                                except subprocess.TimeoutExpired as te:
+                                    duration = 30.0
+                                    status = "fail"
+                                    step_logs = f"Timeout Expired: Command timed out after 30 seconds.\n{te.stdout or ''}\n{te.stderr or ''}"
+                                    returncode = -1
+                                except Exception as e:
+                                    duration = 0.0
+                                    status = "fail"
+                                    step_logs = f"Execution Error: {str(e)}"
+                                    returncode = -2
+                                    
+                                test_run_entry = {
+                                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                    "cmd": cmd,
+                                    "status": status,
+                                    "logs": step_logs,
+                                    "duration_sec": round(duration, 2),
+                                    "returncode": returncode
+                                }
+                                
+                                if "test_runs" not in WORKFLOW_STATE["testing_data"]:
+                                    WORKFLOW_STATE["testing_data"]["test_runs"] = []
+                                WORKFLOW_STATE["testing_data"]["test_runs"].insert(0, test_run_entry)
+
                             
                 except Exception as parse_err:
                     print(f"Error parsing agent JSON response: {parse_err}")
@@ -436,6 +639,152 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+                
+        elif self.path == '/api/run-tests':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                cmd = payload.get('cmd', '')
+                env_vars = payload.get('env_vars', {})
+                
+                # Update environment variables and steps in local state
+                WORKFLOW_STATE["testing_data"]["env_vars"] = env_vars
+                if "test_steps" in payload:
+                    WORKFLOW_STATE["testing_data"]["test_steps"] = payload.get("test_steps", [])
+                
+                if not cmd:
+                    raise ValueError("Test command is required.")
+                
+                # Execute in the active workspace
+                workspace_path = payload.get('workspace_path', '.')
+                cwd = os.path.abspath(workspace_path)
+                
+                # Set up environment variables
+                import os as env_os
+                run_env = env_os.environ.copy()
+                for k, v in env_vars.items():
+                    run_env[str(k)] = str(v)
+                
+                import subprocess, time
+                print(f"System: Running test step '{cmd}' in {cwd}...")
+                
+                start_time = time.time()
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    cwd=cwd,
+                    env=run_env,
+                    timeout=30 # Prevent hangs
+                )
+                duration = time.time() - start_time
+                
+                status = "pass" if result.returncode == 0 else "fail"
+                logs = (result.stdout or "") + "\n" + (result.stderr or "")
+                
+                test_run_entry = {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "cmd": cmd,
+                    "status": status,
+                    "logs": logs,
+                    "duration_sec": round(duration, 2),
+                    "returncode": result.returncode
+                }
+                
+                if "test_runs" not in WORKFLOW_STATE["testing_data"]:
+                    WORKFLOW_STATE["testing_data"]["test_runs"] = []
+                WORKFLOW_STATE["testing_data"]["test_runs"].insert(0, test_run_entry)
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'status': 'success',
+                    'test_run': test_run_entry,
+                    'state': WORKFLOW_STATE
+                }).encode('utf-8'))
+                
+            except subprocess.TimeoutExpired as te:
+                import time
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                test_run_entry = {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "cmd": cmd,
+                    "status": "fail",
+                    "logs": f"Timeout Expired: Command timed out after 30 seconds.\n{te.stdout or ''}\n{te.stderr or ''}",
+                    "duration_sec": 30.0,
+                    "returncode": -1
+                }
+                if "test_runs" not in WORKFLOW_STATE["testing_data"]:
+                    WORKFLOW_STATE["testing_data"]["test_runs"] = []
+                WORKFLOW_STATE["testing_data"]["test_runs"].insert(0, test_run_entry)
+                self.wfile.write(json.dumps({
+                    'status': 'success',
+                    'test_run': test_run_entry,
+                    'state': WORKFLOW_STATE
+                }).encode('utf-8'))
+                
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+            return
+            
+        elif self.path == '/api/testing/baseline':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                baseline = payload.get('baseline', [])
+                WORKFLOW_STATE["testing_data"]["regression_baseline"] = baseline
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'state': WORKFLOW_STATE}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+            return
+            
+        elif self.path == '/api/testing/update':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                if "env_vars" in payload:
+                    WORKFLOW_STATE["testing_data"]["env_vars"] = payload["env_vars"]
+                if "test_steps" in payload:
+                    WORKFLOW_STATE["testing_data"]["test_steps"] = payload["test_steps"]
+                if "remediation_instructions" in payload:
+                    WORKFLOW_STATE["testing_data"]["remediation_instructions"] = payload["remediation_instructions"]
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'state': WORKFLOW_STATE}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+            return
         else:
             self.send_response(404)
             self.end_headers()
