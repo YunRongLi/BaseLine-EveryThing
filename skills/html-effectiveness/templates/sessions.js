@@ -1,4 +1,17 @@
+document.addEventListener('keydown', function(e) {
+    if (e.altKey && e.key === 'Enter') {
+        const agentInput = document.getElementById('agentInput');
+        if (document.activeElement === agentInput && agentInput) {
+            e.preventDefault();
+            if (typeof window.sendAgentMessage === 'function') {
+                window.sendAgentMessage();
+            }
+        }
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
+
     // 1. Find navbar container
     const navRight = document.querySelector('.nav-right') || document.querySelector('.navbar-controls') || document.querySelector('.navbar');
     if (!navRight) return;
@@ -77,6 +90,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = modalHtml;
     document.body.appendChild(tempDiv.firstElementChild);
+
+    // 6. Inject Premium Glassmorphism Permission Gate Modal HTML
+    const permModalHtml = `
+    <div id="permissionModal" style="display:none; position:fixed; inset:0; background:rgba(15, 23, 42, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items:center; justify-content:center; z-index:3000; font-family: system-ui, -apple-system, sans-serif; transition: all 0.3s ease;">
+        <div style="background: rgba(255, 255, 255, 0.85); border: 1.5px solid rgba(255, 255, 255, 0.5); border-radius: 16px; padding: 2rem; width: 480px; max-width: 90%; box-shadow: 0 8px 32px rgba(15, 23, 42, 0.15); display: flex; flex-direction: column; text-align: center; gap: 1.5rem; transform: scale(0.95); transition: transform 0.3s ease;">
+            <div style="display: flex; justify-content: center;">
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1.5px solid rgba(239, 68, 68, 0.3); border-radius: 50%; width: 56px; height: 56px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 1.5rem; font-weight: bold;">
+                    !
+                </div>
+            </div>
+            <div>
+                <h3 id="perm-title" style="margin: 0 0 0.5rem 0; font-weight: 600; font-size: 1.25rem; color: #0f172a;">Permission Required</h3>
+                <p id="perm-desc" style="margin: 0; font-size: 0.9375rem; color: #475569; line-height: 1.5;"></p>
+            </div>
+            <div style="background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 8px; padding: 0.75rem 1rem; font-family: monospace; font-size: 0.8125rem; color: #1e293b; text-align: left; max-height: 120px; overflow-y: auto; word-break: break-all;">
+                <span id="perm-target" style="font-weight: 600;"></span>
+            </div>
+            <div style="display: flex; gap: 0.75rem; width: 100%;">
+                <button onclick="respondPermission(false)" style="flex: 1; padding: 0.625rem; border-radius: 8px; border: 1.5px solid #e2e8f0; background: #fff; color: #475569; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.15s ease;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">Deny</button>
+                <button onclick="respondPermission(true)" style="flex: 1; padding: 0.625rem; border-radius: 8px; border: none; background: #ef4444; color: #fff; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.15s ease;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Allow</button>
+            </div>
+        </div>
+    </div>
+    `;
+    const tempDivPerm = document.createElement('div');
+    tempDivPerm.innerHTML = permModalHtml;
+    document.body.appendChild(tempDivPerm.firstElementChild);
 });
 
 window.openSessionsModal = function() {
@@ -252,3 +292,79 @@ async function handleNewSession() {
         console.error('Failed to start new session:', err);
     }
 }
+
+let isPermissionModalOpen = false;
+
+async function checkPendingPermission() {
+    try {
+        const res = await fetch('/api/state');
+        const data = await res.json();
+        if (data.status === 'success' && data.state) {
+            const pending = data.state.pending_permission;
+            const modal = document.getElementById('permissionModal');
+            if (pending) {
+                // Populate text
+                const titleEl = document.getElementById('perm-title');
+                const descEl = document.getElementById('perm-desc');
+                const targetEl = document.getElementById('perm-target');
+                
+                const isZh = (localStorage.getItem('app_lang') || 'en') === 'zh';
+                titleEl.textContent = isZh ? "權限授權請求" : "Permission Gate Authorization";
+                descEl.textContent = pending.message || (isZh ? "系統即將執行高風險操作，需要您的核准。" : "The AI Agent requested a high-risk operation.");
+                targetEl.textContent = pending.target || "";
+                
+                if (modal && modal.style.display !== 'flex') {
+                    modal.style.display = 'flex';
+                    // Trigger reflow for transition
+                    setTimeout(() => {
+                        modal.firstElementChild.style.transform = 'scale(1)';
+                    }, 10);
+                    isPermissionModalOpen = true;
+                }
+            } else {
+                if (modal && modal.style.display === 'flex') {
+                    modal.firstElementChild.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        modal.style.display = 'none';
+                    }, 150);
+                    isPermissionModalOpen = false;
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error checking pending permission:", e);
+    }
+}
+
+window.respondPermission = async function(approved) {
+    try {
+        const res = await fetch('/api/agent/permission/respond', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ approved: approved })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            const modal = document.getElementById('permissionModal');
+            if (modal) {
+                modal.firstElementChild.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                }, 150);
+            }
+            isPermissionModalOpen = false;
+            
+            // Refresh parent view logs if fetchDebugLogs is present
+            if (typeof fetchDebugLogs === 'function') {
+                await fetchDebugLogs();
+            }
+        }
+    } catch (e) {
+        console.error("Error sending permission response:", e);
+    }
+};
+
+// Start checking intervals
+setInterval(checkPendingPermission, 3000);

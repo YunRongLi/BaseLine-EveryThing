@@ -861,6 +861,105 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
                 
+        elif self.path == '/api/agent/event':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                if "event" in payload and isinstance(payload["event"], dict):
+                    event_data = payload["event"]
+                else:
+                    event_data = payload
+                
+                from event_router import LLMAgentEventRouter
+                router = LLMAgentEventRouter()
+                result = router.route_event(event_data)
+                
+                # Check outcome and update WORKFLOW_STATE / debug_logs
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+                if "debug_logs" not in WORKFLOW_STATE:
+                    WORKFLOW_STATE["debug_logs"] = ""
+                
+                status = result.get("status")
+                if status == "requires_confirmation":
+                    WORKFLOW_STATE["pending_permission"] = {
+                        "permission": result.get("permission"),
+                        "target": result.get("target"),
+                        "message": result.get("message")
+                    }
+                    log_msg = f"[PERMISSION REQUIRED] {result.get('message')}"
+                    WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                elif status == "approved":
+                    log_msg = f"[PERMISSION APPROVED] {result.get('permission')} approved on: {result.get('target')}"
+                    WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                elif status == "processed":
+                    log_msg = f"[EVENT] {result.get('message')}"
+                    WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                    
+                    if result.get("type") == "tool":
+                        if "tool_tracking" not in WORKFLOW_STATE:
+                            WORKFLOW_STATE["tool_tracking"] = {}
+                        WORKFLOW_STATE["tool_tracking"]["status"] = result.get("tool_status")
+                        WORKFLOW_STATE["tool_tracking"]["message"] = result.get("message")
+                elif status == "stream":
+                    log_msg = f"[STREAM DELTA ({result.get('field')})] {result.get('delta')}"
+                    WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'routing_result': result}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+                
+        elif self.path == '/api/agent/permission/respond':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                approved = payload.get('approved', False)
+                
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+                if "debug_logs" not in WORKFLOW_STATE:
+                    WORKFLOW_STATE["debug_logs"] = ""
+                
+                pending = WORKFLOW_STATE.get("pending_permission")
+                if pending:
+                    perm = pending.get("permission")
+                    target = pending.get("target")
+                    if approved:
+                        log_msg = f"[USER ALLOWED] Granted permission to execute: {perm} on {target}"
+                        WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                    else:
+                        log_msg = f"[USER DENIED] Blocked permission to execute: {perm} on {target}"
+                        WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                    
+                    WORKFLOW_STATE.pop("pending_permission", None)
+                else:
+                    log_msg = "[SYSTEM WARNING] Received user permission response, but no pending request was active."
+                    WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {log_msg}\n\n" + WORKFLOW_STATE["debug_logs"]
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'approved': approved}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
+                
         elif self.path == '/api/recursive-search':
             content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)

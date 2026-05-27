@@ -1617,11 +1617,186 @@
                 appendAgentOutput('NETWORK ERROR: '+e.message);
             } finally { setLoading(false, null); }
         }
+        function parseMarkdown(text) {
+            if (!text) return "";
+            
+            // 1. Escape HTML to prevent broken formatting with C++ templates like <int>
+            let html = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+            
+            // 2. Handle block code blocks before other replacements
+            const codeBlocks = [];
+            html = html.replace(/```(?:[a-zA-Z0-9+#-]+)?\n([\s\S]*?)\n```/g, function(match, code) {
+                codeBlocks.push(code);
+                return `__CODE_BLOCK_PLACEHOLDER_${codeBlocks.length - 1}__`;
+            });
+            
+            // 3. Inline code
+            html = html.replace(/`(.*?)`/g, "<code>$1</code>");
+            
+            // 4. Bold and Italic
+            html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+            html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+            
+            // 5. Headings
+            html = html.replace(/^#### (.*?)$/gm, "<h4>$1</h4>");
+            html = html.replace(/^### (.*?)$/gm, "<h3>$1</h3>");
+            html = html.replace(/^## (.*?)$/gm, "<h2>$1</h2>");
+            html = html.replace(/^# (.*?)$/gm, "<h1>$1</h1>");
+            
+            // 6. Horizontal rule
+            html = html.replace(/^---$/gm, "<hr>");
+            
+            // 7. Parse line by line for paragraphs and lists
+            const lines = html.split('\n');
+            let inList = false;
+            let listType = null;
+            let parsedLines = [];
+            
+            for (let line of lines) {
+                let trimmed = line.trim();
+                
+                // Unordered list item
+                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                    if (!inList || listType !== 'ul') {
+                        if (inList) parsedLines.push(`</${listType}>`);
+                        parsedLines.push('<ul>');
+                        inList = true;
+                        listType = 'ul';
+                    }
+                    parsedLines.push(`<li>${trimmed.substring(2)}</li>`);
+                } 
+                // Ordered list item
+                else if (/^\d+\.\s/.test(trimmed)) {
+                    let match = trimmed.match(/^(\d+)\.\s(.*)/);
+                    if (!inList || listType !== 'ol') {
+                        if (inList) parsedLines.push(`</${listType}>`);
+                        parsedLines.push('<ol>');
+                        inList = true;
+                        listType = 'ol';
+                    }
+                    parsedLines.push(`<li>${match[2]}</li>`);
+                } 
+                // Non-list line
+                else {
+                    if (inList) {
+                        parsedLines.push(`</${listType}>`);
+                        inList = false;
+                        listType = null;
+                    }
+                    
+                    if (trimmed !== '') {
+                        if (trimmed.startsWith('<h') || trimmed.startsWith('<hr') || trimmed.startsWith('__CODE_BLOCK_PLACEHOLDER_')) {
+                            parsedLines.push(line);
+                        } else {
+                            parsedLines.push(`<p>${line}</p>`);
+                        }
+                    } else {
+                        parsedLines.push('');
+                    }
+                }
+            }
+            if (inList) {
+                parsedLines.push(`</${listType}>`);
+            }
+            
+            html = parsedLines.join('\n');
+            
+            // 8. Re-inject code blocks
+            for (let i = 0; i < codeBlocks.length; i++) {
+                html = html.replace(`__CODE_BLOCK_PLACEHOLDER_${i}__`, `<pre><code>${codeBlocks[i]}</code></pre>`);
+            }
+            
+            return html;
+        }
+
         function appendAgentOutput(text){
             const out = document.getElementById('agentOutput');
             if(!out) return;
+            
+            // Set sans-serif font for agentOutput container so it's readable
+            out.style.fontFamily = "var(--sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            out.style.fontSize = "0.875rem";
+            out.style.lineHeight = "1.5";
+            
             const div = document.createElement('div');
-            div.textContent = text;
+            div.style.marginBottom = "1.5rem";
+            div.style.borderBottom = "1px solid var(--gray-200)";
+            div.style.paddingBottom = "1rem";
+            
+            div.innerHTML = parseMarkdown(text);
+            
+            // Fine-tune styles of rendered children for aesthetics
+            const paragraphs = div.getElementsByTagName('p');
+            for (let p of paragraphs) {
+                p.style.marginBottom = "0.75rem";
+                p.style.lineHeight = "1.6";
+            }
+            const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            for (let h of headings) {
+                h.style.marginTop = "1rem";
+                h.style.marginBottom = "0.5rem";
+                h.style.color = "var(--slate)";
+                h.style.fontWeight = "600";
+            }
+            const lists = div.querySelectorAll('ul, ol');
+            for (let l of lists) {
+                l.style.marginLeft = "1.25rem";
+                l.style.marginBottom = "0.75rem";
+            }
+            const listItems = div.getElementsByTagName('li');
+            for (let li of listItems) {
+                li.style.marginBottom = "0.25rem";
+            }
+            const inlineCode = div.getElementsByTagName('code');
+            for (let c of inlineCode) {
+                c.style.fontFamily = "var(--mono)";
+                c.style.background = "var(--gray-200)";
+                c.style.padding = "0.1rem 0.3rem";
+                c.style.borderRadius = "4px";
+                c.style.fontSize = "0.8125rem";
+            }
+            const preBlocks = div.getElementsByTagName('pre');
+            for (let pb of preBlocks) {
+                pb.style.background = "var(--slate)";
+                pb.style.color = "var(--ivory)";
+                pb.style.padding = "0.75rem";
+                pb.style.borderRadius = "6px";
+                pb.style.overflowX = "auto";
+                pb.style.marginBottom = "0.75rem";
+                const preCode = pb.getElementsByTagName('code');
+                for (let pc of preCode) {
+                    pc.style.background = "transparent";
+                    pc.style.padding = "0";
+                }
+            }
+            const hrTags = div.getElementsByTagName('hr');
+            for (let hr of hrTags) {
+                hr.style.border = "none";
+                hr.style.borderTop = "1px solid var(--gray-200)";
+                hr.style.margin = "1rem 0";
+            }
+            const tables = div.getElementsByTagName('table');
+            for (let t of tables) {
+                t.style.width = "100%";
+                t.style.borderCollapse = "collapse";
+                t.style.marginBottom = "0.75rem";
+                t.style.fontSize = "0.8125rem";
+                const ths = t.getElementsByTagName('th');
+                for (let th of ths) {
+                    th.style.border = "1px solid var(--gray-200)";
+                    th.style.padding = "0.4rem";
+                    th.style.background = "var(--gray-50)";
+                    th.style.fontWeight = "600";
+                }
+                const tds = t.getElementsByTagName('td');
+                for (let td of tds) {
+                    td.style.border = "1px solid var(--gray-200)";
+                    td.style.padding = "0.4rem";
+                }
+            }
             out.appendChild(div);
             out.scrollTop = out.scrollHeight;
         }
