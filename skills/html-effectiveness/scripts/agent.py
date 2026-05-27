@@ -39,6 +39,39 @@ async def call_claude_async(model_name, prompt):
                 error_msg = response.text
             raise RuntimeError(f"Anthropic API Error ({response.status_code}): {error_msg}")
 
+async def call_vllm_async(model_name, prompt):
+    import httpx
+    url = os.environ.get("VLLM_API_URL")
+    if not url:
+        raise ValueError("VLLM API URL is not configured.")
+        
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer not-needed"
+    }
+    
+    data = {
+        "model": model_name,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 8192
+    }
+    
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        response = await client.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            res_json = response.json()
+            return res_json["choices"][0]["message"]["content"]
+        else:
+            try:
+                error_detail = response.json()
+                error_msg = str(error_detail)
+            except Exception:
+                error_msg = response.text
+            raise RuntimeError(f"VLLM API Error ({response.status_code}): {error_msg}")
+
 async def call_agent_async(command, data):
     if not check_api_key():
         return "Error: No API key is configured (Neither GEMINI_API_KEY nor ANTHROPIC_ADMIN_API_KEY)."
@@ -344,19 +377,39 @@ You MUST respond ONLY with a JSON block matching this exact schema:
 }}
 ```
 """
+    elif command == "chat":
+        messages = data.get("messages", [])
+        user_msg = messages[-1].get("content", "") if messages else ""
+        prompt += f"""The user says: "{user_msg}"
+
+Please respond to the user naturally and helpfully.
+You MUST respond ONLY with a JSON block matching this exact schema:
+```json
+{{
+  "chat": "Your textual response here"
+}}
+```
+"""
     else:
         prompt += "Please process this request. Respond only with JSON block."
 
     model_name = data.get('model', '')
+    from config import check_vllm_url
+    
     if not model_name:
-        if check_api_key_anthropic():
+        if check_vllm_url() and not check_api_key_gemini() and not check_api_key_anthropic():
+            model_name = os.environ.get("VLLM_DEFAULT_MODEL", "devstral")
+        elif check_api_key_anthropic():
             model_name = 'claude-3-5-sonnet-latest'
         elif check_api_key_gemini():
             model_name = 'gemini-3.1-flash-lite'
         else:
-            model_name = 'gemini-2.5-flash'
+            model_name = os.environ.get("VLLM_DEFAULT_MODEL", "devstral") if check_vllm_url() else 'gemini-2.5-flash'
             
     is_claude = model_name.startswith("claude-")
+    is_gemini = "gemini" in model_name.lower() or "flash" in model_name.lower() or "pro" in model_name.lower()
+    vllm_default = os.environ.get("VLLM_DEFAULT_MODEL", "devstral")
+    is_vllm = model_name == vllm_default or (check_vllm_url() and not is_claude and not is_gemini)
     
     if os.environ.get("AGENT_DEBUG", "true").lower() == "true" or os.environ.get("DEBUG", "false").lower() == "true":
         print("======== DEBUG PROMPT ========")
@@ -375,6 +428,11 @@ You MUST respond ONLY with a JSON block matching this exact schema:
                 except Exception as fallback_e:
                     return f"Agent Generation Error (Fallback also failed): {str(fallback_e)}"
             return f"Agent Generation Error: {error_msg}"
+    elif is_vllm:
+        try:
+            return await call_vllm_async(model_name, prompt)
+        except Exception as e:
+            return f"Agent Generation Error (VLLM): {str(e)}"
     else:
         try:
             from google import genai

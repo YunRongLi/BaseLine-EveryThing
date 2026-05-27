@@ -64,11 +64,7 @@ def main():
     sys.stderr = DebugLogStream(sys.stderr, is_stderr=True)
     
     if not check_api_key():
-
-        print("ERROR: No model backend is configured. Set GEMINI_API_KEY, ANTHROPIC_ADMIN_API_KEY, or VLLM_API_URL environment variable.")
-        print("Please configure a supported backend in your system environment or within a local .env file.")
-        print("Exiting server startup.")
-        sys.exit(1)
+        print("WARNING: No model backend is configured initially. Set GEMINI_API_KEY, ANTHROPIC_ADMIN_API_KEY, or VLLM_API_URL via the web interface or environment variables.")
     
     if len(sys.argv) > 1:
         target_dir = sys.argv[1]

@@ -821,7 +821,10 @@
                     data.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model;
-                        option.textContent = model;
+                        let provider = 'vllm';
+                        if (model.toLowerCase().includes('gemini')) provider = 'google';
+                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
+                        option.textContent = `${provider} - ${model}`;
                         if (model === defaultModel) option.selected = true;
                         select.appendChild(option);
                     });

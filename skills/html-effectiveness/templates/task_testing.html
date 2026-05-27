@@ -111,17 +111,7 @@
             padding: 0 1.5rem;
         }
 
-        .layout-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2rem;
-        }
 
-        @media (min-width: 900px) {
-            .layout-grid {
-                grid-template-columns: 3fr 2fr;
-            }
-        }
 
         .card {
             background-color: var(--paper);
@@ -497,13 +487,7 @@
         
         .modal-content { max-height: 90vh; overflow:auto; }
 
-        .debug-console > * {
-            direction: ltr;
-        }
 
-        .debug-console.open {
-            transform: translateX(0);
-        }
 
         .debug-toggle-btn {
             position: fixed;
@@ -596,6 +580,7 @@
                 <option value="en">EN</option>
                 <option value="zh">中文</option>
             </select>
+            <button id="btn-configure" class="btn btn-secondary" onclick="openAgentConfigModal()" style="white-space:nowrap;">Configure</button>
         </div>
     </nav>
 
@@ -727,6 +712,34 @@
                 <div class="card" style="padding: 1.5rem; text-align: center;">
                     <div class="eyebrow" data-i18n="eyebrowReset">Completed</div>
                     <a href="/reset" class="btn btn-secondary btn-full" style="text-align: center;" data-i18n="btnRestart">Start New Task</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Agent Console (Right side panel) -->
+        <div class="side-panel agent-panel card" id="agentPanel" style="display:flex; flex-direction:column; padding:1.5rem; margin-bottom: 0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgent">AI Assistant</div>
+                    <h2 style="font-size:1.15rem; margin:0;" data-i18n="titleAgent">Agent Console</h2>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
+                        <div class="spinner"></div>
+                    </div>
+                    <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
+                    <button id="btn-toggle-agent" type="button" onclick="toggleAgentPanel()" style="background:none; border:none; cursor:pointer; color:var(--gray-500); font-size:1.2rem; padding:0;">&minus;</button>
+                </div>
+            </div>
+            
+            <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.875rem; margin-bottom:1rem;"></div>
+            
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <textarea id="agentInput" rows="3" placeholder="Message to agent..." style="width:100%; font-size:0.875rem; padding:0.5rem;"></textarea>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary btn-full" style="padding:0.5rem; font-size:0.875rem;" onclick="sendAgentMessage()">Send</button>
+                    <button class="btn btn-secondary" style="padding:0.5rem; font-size:0.875rem;" onclick="document.getElementById('agentInput').value=''">Clear</button>
                 </div>
             </div>
         </div>
@@ -961,7 +974,10 @@
                     data.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model;
-                        option.textContent = model;
+                        let provider = 'vllm';
+                        if (model.toLowerCase().includes('gemini')) provider = 'google';
+                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
+                        option.textContent = `${provider} - ${model}`;
                         if (model === defaultModel) option.selected = true;
                         select.appendChild(option);
                     });
@@ -1467,7 +1483,10 @@
                     data.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model;
-                        option.textContent = model;
+                        let provider = 'vllm';
+                        if (model.toLowerCase().includes('gemini')) provider = 'google';
+                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
+                        option.textContent = `${provider} - ${model}`;
                         if (model === defaultModel) option.selected = true;
                         select.appendChild(option);
                     });

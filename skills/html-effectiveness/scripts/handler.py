@@ -146,15 +146,19 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.path = "/task_workflow.html"
             
         if clean_path == 'api/models':
+            from config import check_vllm_url
             has_gemini = check_api_key_gemini()
             has_anthropic = check_api_key_anthropic()
+            has_vllm = check_vllm_url()
             
-            if has_anthropic and not has_gemini:
+            if has_vllm and not has_gemini and not has_anthropic:
+                default_model = os.environ.get("VLLM_DEFAULT_MODEL", "devstral")
+            elif has_anthropic and not has_gemini:
                 default_model = "claude-3-5-sonnet-latest"
             elif has_gemini:
                 default_model = "Gemini 3.1 Pro (High)"
             else:
-                default_model = "Gemini 3.1 Pro (High)"
+                default_model = os.environ.get("VLLM_DEFAULT_MODEL", "devstral") if has_vllm else "Gemini 3.1 Pro (High)"
                 
             models = []
             common_claude = ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
@@ -183,9 +187,15 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 ]
             
             # Add Claude models if Anthropic is supported or available
-            for cm in reversed(common_claude):
-                if cm not in models:
-                    models.insert(0, cm)
+            if has_anthropic:
+                for cm in reversed(common_claude):
+                    if cm not in models:
+                        models.insert(0, cm)
+            
+            if has_vllm:
+                vllm_m = os.environ.get("VLLM_DEFAULT_MODEL", "devstral")
+                if vllm_m not in models:
+                    models.insert(0, vllm_m)
                     
             if default_model not in models:
                 models.insert(0, default_model)
@@ -204,6 +214,34 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 'models': models,
                 'default_model': default_model,
                 'server_instance_id': self.__class__.SERVER_INSTANCE_ID
+            }).encode('utf-8'))
+            return
+            
+        elif clean_path == 'api/agent-config':
+            import config
+            config.load_env()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            cfg = {
+                "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", ""),
+                "ANTHROPIC_API_KEY": os.environ.get("ANTHROPIC_API_KEY", ""),
+                "VLLM_API_URL": os.environ.get("VLLM_API_URL", ""),
+                "VLLM_DEFAULT_MODEL": os.environ.get("VLLM_DEFAULT_MODEL", "devstral")
+            }
+            
+            avail = {
+                "gemini": config.check_api_key_gemini(),
+                "anthropic": config.check_api_key_anthropic(),
+                "vllm": config.check_vllm_url()
+            }
+            
+            self.wfile.write(json.dumps({
+                'status': 'success',
+                'config': cfg,
+                'available_backends': avail
             }).encode('utf-8'))
             return
             
@@ -321,6 +359,27 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing session_id'}).encode('utf-8'))
+            return
+
+        elif self.path == '/api/agent-config':
+            import config
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                cfg = payload.get('config', {})
+                config.persist_env(cfg)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'message': 'Configuration updated.'}).encode('utf-8'))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': str(e)}).encode('utf-8'))
             return
 
         if self.path == '/api/state/reset':
@@ -486,13 +545,6 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 # Execute agent call
                 response_text = asyncio.run(call_agent_async(command, data))
                 
-                # Debug logging of agent response
-                if os.environ.get("AGENT_DEBUG", "true").lower() == "true" or os.environ.get("DEBUG", "false").lower() == "true":
-                    print("======== DEBUG RESPONSE ========")
-                    print(response_text)
-                    print("================================")
-                    sys.stdout.flush()
-                
                 response_text_clean = response_text
                 
                 # Parse JSON response from agent to update state
@@ -514,6 +566,29 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 try:
                     parsed_response = json.loads(json_str)
                     
+                    # Extract text values from JSON so the UI console displays cleanly
+                    def extract_text(obj):
+                        texts = []
+                        if isinstance(obj, dict):
+                            for k, v in obj.items():
+                                if k != "file_tree":  # file_tree is structured differently and verbose
+                                    texts.extend(extract_text(v))
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                texts.extend(extract_text(item))
+                        elif isinstance(obj, str):
+                            texts.append(obj)
+                        return texts
+                    
+                    agent_text = "\n".join(extract_text(parsed_response))
+                    response_text_clean = agent_text
+                    
+                    # Debug logging of agent response cleanly
+                    if os.environ.get("AGENT_DEBUG", "true").lower() == "true" or os.environ.get("DEBUG", "false").lower() == "true":
+                        print("> Agent:")
+                        print(agent_text)
+                        sys.stdout.flush()
+                        
                     if command == "task-explore":
                         WORKFLOW_STATE["current_stage"] = "create"
                         

@@ -7,8 +7,10 @@ def load_env():
                 raw = line.strip()
                 if raw and not raw.startswith('#') and '=' in raw:
                     key, val = raw.split('=', 1)
-                    value = val.strip().strip('"').strip("'")
-                    os.environ[key.strip()] = value
+                    key = key.strip()
+                    if key.startswith("VLLM_"):
+                        value = val.strip().strip('"').strip("'")
+                        os.environ[key] = value
 
 
 def persist_env(entries, env_path='.env'):
@@ -73,6 +75,6 @@ def check_api_key_anthropic():
     return "ANTHROPIC_ADMIN_API_KEY" in os.environ or "ANTHROPIC_API_KEY" in os.environ
 
 def check_api_key():
-    return check_api_key_gemini() or check_api_key_anthropic()
+    return check_api_key_gemini() or check_api_key_anthropic() or check_vllm_url()
 
 # Global Memory state for the workflow (completely structured JSON)

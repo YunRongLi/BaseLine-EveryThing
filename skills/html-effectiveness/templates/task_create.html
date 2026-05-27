@@ -483,18 +483,52 @@
                 <option value="en">EN</option>
                 <option value="zh">中文</option>
             </select>
+            <button id="btn-configure" class="btn btn-secondary" onclick="openAgentConfigModal()" style="white-space:nowrap;">Configure</button>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="card">
-            <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
-            <h1 data-i18n="titleCreate">Create a New Task</h1>
-            <div class="subtitle" data-i18n="subCreate">Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.</div>
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
 
     <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
         <!-- Main Card (left) -->
-
         <div class="main-panel">
             <div class="card">
                 <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
@@ -514,41 +548,61 @@
                             <option value="Refactor" data-i18n="optRefactor">Refactor</option>
                             <option value="Research" data-i18n="optResearch">Research</option>
                         </select>
-                        <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com/...">
-                        <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
                     </div>
-                    <div id="referencesList" class="ref-list"></div>
-                </div>
+                    <div class="form-group">
+                        <label data-i18n="lblGoal">Goal</label>
+                        <textarea id="goal" rows="4" data-i18n-ph="phGoal" placeholder="Describe the main objectives, target requirements, and high level architecture..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblContext">Background Context</label>
+                        <textarea id="context" rows="4" data-i18n-ph="phContext" placeholder="Provide background info, technical constraints, logs, or architectural context..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="lblReferences">Import Reference Documents & Code</label>
+                        <div class="reference-row">
+                            <select id="refType" class="reference-type">
+                                <option value="local" data-i18n="optLocal">Local Path</option>
+                                <option value="url" data-i18n="optUrl">URL</option>
+                            </select>
+                            <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com/...">
+                            <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
+                        </div>
+                        <div id="referencesList" class="ref-list"></div>
+                    </div>
 
-                <div class="btn-row">
-                    <button type="button" class="btn btn-secondary" id="btn-copy-scoping" onclick="copyScopingMarkdown()" data-i18n="btnCopyScoping">Copy Scoping as Markdown</button>
-                    <button type="submit" class="btn btn-primary btn-full" id="btn-create" data-i18n="btnSubmit">Submit Task</button>
-                </div>
-            </form>
+                    <div class="btn-row">
+                        <button type="button" class="btn btn-secondary" id="btn-copy-scoping" onclick="copyScopingMarkdown()" data-i18n="btnCopyScoping">Copy Scoping as Markdown</button>
+                        <button type="submit" class="btn btn-primary btn-full" id="btn-create" data-i18n="btnSubmit">Submit Task</button>
+                    </div>
+                </form>
+            </div>
         </div>
 
-        <!-- Debug Console -->
-        <button class="debug-toggle-btn" onclick="document.querySelector('.debug-console').classList.toggle('open')">Debug</button>
-        <div class="debug-console">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
+        <!-- Agent Console (Right side panel) -->
+        <div class="side-panel agent-panel card" id="agentPanel" style="display:flex; flex-direction:column; padding:1.5rem; margin-bottom: 0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgent">AI Assistant</div>
+                    <h2 style="font-size:1.15rem; margin:0;" data-i18n="titleAgent">Agent Console</h2>
+                </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
-                        <div class="spinner"></div> <span data-i18n="processing">Processing...</span>
+                        <div class="spinner"></div>
                     </div>
-                    <button type="button" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; color: var(--gray-500); padding: 0;" onclick="document.querySelector('.debug-console').classList.remove('open')">&times;</button>
+                    <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
+                    <button id="btn-toggle-agent" type="button" onclick="toggleAgentPanel()" style="background:none; border:none; cursor:pointer; color:var(--gray-500); font-size:1.2rem; padding:0;">&minus;</button>
                 </div>
-                <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
             </div>
-            <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
-                <textarea id="agentInput" rows="4" placeholder="Message to agent..." style="width:100%;"></textarea>
+            
+            <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.875rem; margin-bottom:1rem;"></div>
+            
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <textarea id="agentInput" rows="3" placeholder="Message to agent..." style="width:100%; font-size:0.875rem; padding:0.5rem;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                    <button class="btn btn-primary btn-full" style="padding:0.5rem; font-size:0.875rem;" onclick="sendAgentMessage()">Send</button>
+                    <button class="btn btn-secondary" style="padding:0.5rem; font-size:0.875rem;" onclick="document.getElementById('agentInput').value=''">Clear</button>
                 </div>
-                <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.9rem;"></div>
             </div>
-            <pre id="globalDebug" class="debug-pre" >Ready. Waiting for user interaction...</pre>
         </div>
     </div>
 
@@ -760,21 +814,40 @@
                 console.error('Could not fetch state', err);
             }
 
-            // Fetch models
+            await loadAgentConfig();
+            await refreshModelSelect();
+        });
+
+        function setAgentConfigFeedback(message, isError = false) {
+            const feedback = document.getElementById('agentConfigFeedback');
+            if (!feedback) return;
+            feedback.textContent = message;
+            feedback.style.color = isError ? 'var(--red)' : 'var(--olive)';
+        }
+
+        async function refreshModelSelect() {
             try {
                 const res = await fetch('/api/models');
                 const data = await res.json();
                 if (data.status === 'success') {
                     const select = document.getElementById('globalModelSelect');
+                    if (!select) return;
+                    const current = select.value;
                     select.innerHTML = '';
                     const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
                     data.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model;
-                        option.textContent = model;
+                        let provider = 'vllm';
+                        if (model.toLowerCase().includes('gemini')) provider = 'google';
+                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
+                        option.textContent = `${provider} - ${model}`;
                         if (model === defaultModel) option.selected = true;
                         select.appendChild(option);
                     });
+                    if (current && data.models.includes(current)) {
+                        select.value = current;
+                    }
                 }
             } catch (err) {
                 console.error('Could not load models', err);
@@ -863,8 +936,8 @@
 
         // Toggle side panels
                 function toggleDebugConsole() {
-            const console = document.getElementById('debugConsole');
-            console.classList.toggle('open');
+            const c = document.getElementById('debugConsole');
+            if (c) c.classList.toggle('open');
         }
         function toggleAgentPanel(){
             const panel = document.getElementById('agentPanel');
