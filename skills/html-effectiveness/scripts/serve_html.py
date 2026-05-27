@@ -25,13 +25,13 @@ _OC_BASE = "http://127.0.0.1:4096"
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATES_DIR = os.path.join(_SCRIPT_DIR, "..", "templates")
 _STATIC_DIR = os.path.join(_SCRIPT_DIR, "..", "static")
-_STATE_FILE = os.path.join(_SCRIPT_DIR, "..", "workflow_state.json")
+_STATE_FILE = os.path.join(os.getcwd(), ".workflow", "workflow_state.json")
 
 _DEFAULT_STATE = {
     "current_stage": "create",
     "create_data": {"title": "", "category": "Feature", "goal": "", "context": ""},
-    "spec_data": {"sections": [], "open_questions": []},
-    "develop_data": {"workflow_steps": [], "file_tree": [], "code_snippets": [], "open_questions": []},
+    "spec_data": {"sections": [], "open_questions": {}},
+    "develop_data": {"workflow_steps": [], "file_tree": [], "code_snippets": [], "open_questions": {}},
     "testing_data": {"test_steps": [], "env_vars": {}, "test_runs": [], "remediation_instructions": "", "regression_baseline": []},
     "completed_data": {"summary_items": [], "created_files": [], "verification_results": []},
     "references": [],
@@ -53,6 +53,7 @@ def _load_state():
 
 def _save_state(state):
     try:
+        os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
         with open(_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception as exc:
