@@ -951,10 +951,9 @@
 
         async function fetchState() {
             try {
-                const res = await fetch('/api/state');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    appState = data.state;
+                const state = await ocLoadState();
+                if (state) {
+                    appState = state;
                     renderUI();
                 }
             } catch (err) {
@@ -964,54 +963,21 @@
         }
 
         async function fetchModels() {
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    const select = document.getElementById('globalModelSelect');
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        let provider = 'vllm';
-                        if (model.toLowerCase().includes('gemini')) provider = 'google';
-                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
-                        option.textContent = `${provider} - ${model}`;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
+            // Deprecated in frontend-only architecture
+            const select = document.getElementById('globalModelSelect');
+            if (select) {
+                select.innerHTML = '<option value="opencode-native" selected>OpenCode Native Model</option>';
             }
         }
 
         async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    if (data.logs) {
-                        pre.textContent = data.logs;
-                    } else {
-                        const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                        pre.textContent = dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    }
-                }
-            } catch (e) {}
+            // Handled completely client-side in this template.
         }
 
         async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
-                });
-                await fetchDebugLogs();
-            } catch (e) {
+            if (typeof ocLogDebug === 'function') {
+                ocLogDebug(message);
+            } else {
                 const pre = document.getElementById('globalDebug');
                 if (pre) {
                     pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
@@ -1234,20 +1200,10 @@
 
         async function saveTestingState() {
             try {
-                const res = await fetch('/api/testing/update', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        env_vars: appState.testing_data.env_vars,
-                        test_steps: appState.testing_data.test_steps,
-                        remediation_instructions: document.getElementById('remediationFeedback').value
-                    })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    appState = data.state;
-                    renderUI();
-                }
+                if (!appState.testing_data) appState.testing_data = {};
+                appState.testing_data.remediation_instructions = document.getElementById('remediationFeedback').value;
+                await ocSaveState(appState);
+                renderUI();
             } catch (e) {
                 console.error(e);
             }
@@ -1262,39 +1218,9 @@
             setLoading(true, btnId);
 
             const pre = document.getElementById('terminalConsole');
-            pre.textContent = `System: Executing command '${cmd}'...\nStreaming subprocess logs...\n`;
+            pre.textContent = `System: Local execution is disabled in frontend-only architecture.\nPlease run '${cmd}' manually in the OpenCode terminal and paste the logs via "Manual Triage".\n`;
             pre.scrollTop = pre.scrollHeight;
-
-            try {
-                const res = await fetch('/api/run-tests', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        cmd: cmd,
-                        env_vars: appState.testing_data.env_vars,
-                        test_steps: appState.testing_data.test_steps,
-                        workspace_path: '.'
-                    })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    appState = data.state;
-                    const latest = data.test_run;
-                    
-                    pre.textContent = `[${latest.timestamp}] CMD: ${latest.cmd}\nSTATUS: ${latest.status.toUpperCase()}\nDURATION: ${latest.duration_sec}s\n\nOUTPUT LOGS:\n=====================================\n${latest.logs}`;
-                    pre.scrollTop = 0;
-                    
-                    logDebug(`SUBPROCESS EXECUTION: Step '${latest.cmd}' exited with status ${latest.status.toUpperCase()}`);
-                    
-                    renderUI();
-                } else {
-                    pre.textContent = `System Error executing test: ` + (data.message || 'Unknown error');
-                }
-            } catch (err) {
-                pre.textContent = `Subprocess Network Error: ` + err.message;
-            } finally {
-                setLoading(false, btnId);
-            }
+            setLoading(false, btnId);
         }
 
         // Manual pasting log triage
@@ -1336,15 +1262,8 @@
             
             // Save state manually
             try {
-                await fetch('/api/testing/update', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        env_vars: appState.testing_data.env_vars,
-                        test_steps: appState.testing_data.test_steps,
-                        remediation_instructions: document.getElementById('remediationFeedback').value
-                    })
-                });
+                appState.testing_data.remediation_instructions = document.getElementById('remediationFeedback').value;
+                await ocSaveState(appState);
             } catch (e) {}
 
             renderUI();
@@ -1370,18 +1289,11 @@
             }
 
             try {
-                const res = await fetch('/api/testing/baseline', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ baseline: passingCmds })
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    appState = data.state;
-                    logDebug(`BASELINE LOCK: Saved ${passingCmds.length} passing commands as stable regression protections.`);
-                    renderUI();
-                    alert("Successfully locked passing steps as baseline regression guards!");
-                }
+                appState.testing_data.regression_baseline = passingCmds;
+                await ocSaveState(appState);
+                logDebug(`BASELINE LOCK: Saved ${passingCmds.length} passing commands as stable regression protections.`);
+                renderUI();
+                alert("Successfully locked passing steps as baseline regression guards!");
             } catch (e) {}
         }
 
@@ -1398,40 +1310,23 @@
             setLoading(true, btnId);
             logDebug(`Remediation Fix Requested. Sending logs and instructions...`);
 
-            const modelSelect = document.getElementById('globalModelSelect');
-            const model = modelSelect ? modelSelect.value : 'gemini-3.1-flash-lite';
-
-            const payload = {
-                command: 'task-regression',
-                data: {
-                    feedback_input: feedback,
-                    test_logs: testLogs,
-                    code_snippets: appState.develop_data.code_snippets,
-                    file_tree: appState.develop_data.file_tree,
-                    model: model,
-                    language: localStorage.getItem('app_lang') || 'en',
-                    workspace_path: '.'
-                }
-            };
-
             try {
-                const res = await fetch('/api/agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                const sessionId = await ocGetOrCreateSessionId();
+                const lang = localStorage.getItem('app_lang') || 'en';
+                const prompt = ocBuildTestingPrompt(feedback, testLogs, appState.develop_data?.code_snippets || [], lang);
+                
+                await ocSendPrompt(sessionId, prompt);
+                const result = await ocPollForCompletion(sessionId, 'task_testing_remediation', (chunk) => {
+                    // Could log chunk if desired
                 });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-regression):\n` + result.response);
-                    document.getElementById('remediationFeedback').value = '';
-                    document.getElementById('remediationDialog').classList.remove('alert-active');
-                    alert("Stabilization patch successfully generated and applied to active workspace!");
-                    await fetchState();
-                } else {
-                    logDebug(`ERROR (task-regression):\n` + (result.message || 'Unknown error'));
-                }
+                
+                logDebug(`SUCCESS (task-regression):\n` + JSON.stringify(result, null, 2));
+                document.getElementById('remediationFeedback').value = '';
+                document.getElementById('remediationDialog').classList.remove('alert-active');
+                alert("Stabilization patch successfully generated and applied to active workspace!");
+                await fetchState();
             } catch (err) {
-                logDebug(`NETWORK ERROR (task-regression):\n` + err.message);
+                logDebug(`ERROR (task-regression):\n` + err.message);
             } finally {
                 setLoading(false, btnId);
             }
@@ -1465,93 +1360,25 @@
             document.getElementById('langSelect').value = savedLang;
             applyLanguage(savedLang);
 
-            await fetchModels();
+            refreshModelSelect();
             await fetchState();
-            await fetchDebugLogs();
         });
     
         async function refreshModelSelect() {
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    const select = document.getElementById('globalModelSelect');
-                    if (!select) return;
-                    const current = select.value;
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        let provider = 'vllm';
-                        if (model.toLowerCase().includes('gemini')) provider = 'google';
-                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
-                        option.textContent = `${provider} - ${model}`;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                    if (current && data.models.includes(current)) {
-                        select.value = current;
-                    }
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
+            // Models are handled natively by OpenCode extension config
+            const select = document.getElementById('globalModelSelect');
+            if (select) {
+                select.innerHTML = '<option value="opencode-native" selected>OpenCode Native Model</option>';
             }
         }
 
         async function loadAgentConfig() {
-            try {
-                const res = await fetch('/api/agent-config');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    document.getElementById('geminiApiKey').value = data.config.GEMINI_API_KEY || '';
-                    document.getElementById('anthropicApiKey').value = data.config.ANTHROPIC_API_KEY || '';
-                    document.getElementById('vllmApiUrl').value = data.config.VLLM_API_URL || '';
-                    document.getElementById('vllmDefaultModel').value = data.config.VLLM_DEFAULT_MODEL || 'devstral';
-
-                    const backendStatus = [];
-                    if (data.available_backends.gemini) backendStatus.push('Gemini: configured');
-                    else backendStatus.push('Gemini: not configured');
-                    if (data.available_backends.anthropic) backendStatus.push('Anthropic: configured');
-                    else backendStatus.push('Anthropic: not configured');
-                    if (data.available_backends.vllm) backendStatus.push('VLLM: configured');
-                    else backendStatus.push('VLLM: not configured');
-                    document.getElementById('backendStatus').textContent = backendStatus.join(' · ');
-                }
-            } catch (err) {
-                console.error('Could not load agent config', err);
-                setAgentConfigFeedback('Failed to load agent configuration.', true);
-            }
+            // Deprecated in OpenCode mode
+            document.getElementById('backendStatus').textContent = 'OpenCode Native API Active';
         }
 
         async function saveAgentConfig() {
-            const payload = {
-                config: {
-                    GEMINI_API_KEY: document.getElementById('geminiApiKey').value.trim(),
-                    ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
-                    VLLM_API_URL: document.getElementById('vllmApiUrl').value.trim(),
-                    VLLM_DEFAULT_MODEL: document.getElementById('vllmDefaultModel').value.trim() || 'devstral'
-                }
-            };
-
-            try {
-                const res = await fetch('/api/agent-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    setAgentConfigFeedback('Agent settings saved successfully.');
-                    await loadAgentConfig();
-                    await refreshModelSelect();
-                } else {
-                    setAgentConfigFeedback(result.message || 'Failed to save agent settings.', true);
-                }
-            } catch (err) {
-                setAgentConfigFeedback('Failed to save agent settings.', true);
-                console.error('saveAgentConfig error', err);
-            }
+            setAgentConfigFeedback('Agent config is managed via OpenCode native settings in this mode.', false);
         }
 
         // Modal open/close for agent configuration
@@ -1801,39 +1628,12 @@
             out.scrollTop = out.scrollHeight;
         }
 
-        // Start polling debug logs
-        fetchDebugLogs();
-        
-        async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    const dict = (typeof i18n !== 'undefined' && i18n[localStorage.getItem('app_lang') || 'en']) ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
-                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    if (pre.textContent !== newText) {
-                        pre.textContent = newText;
-                        pre.scrollTop = pre.scrollHeight;
-                    }
-                }
-            } catch (e) {}
-        }
-
-        async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ message: message })
-                });
-                await fetchDebugLogs();
-            } catch (e) {}
-        }
-
-        setInterval(fetchDebugLogs, 3000);
+        // Polling removed. OpenCode extension handles logs.
     </script>
+    <script src="/opencode_client.js"></script>
     <script src="/sessions.js"></script>
+    <script src="/terminal_input.js"></script>
+    <script src="/keyboard_shortcuts.js"></script>
 
 
 

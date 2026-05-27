@@ -733,36 +733,8 @@
             }
         }
 
-        async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    const dict = (typeof i18n !== 'undefined') ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
-                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    if (pre.textContent !== newText) {
-                        pre.textContent = newText;
-                        pre.scrollTop = pre.scrollHeight;
-                    }
-                }
-            } catch (e) {}
-        }
-
-        async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
-                });
-                await fetchDebugLogs();
-            } catch (e) {
-                const pre = document.getElementById('globalDebug');
-                if (pre) {
-                    pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
-                }
-            }
+        function logDebug(message) {
+            ocLogDebug(message);
         }
 
         function setLoading(isLoading, btnId) {
@@ -809,87 +781,19 @@
         }
 
         async function refreshModelSelect() {
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    const select = document.getElementById('globalModelSelect');
-                    if (!select) return;
-                    const current = select.value;
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        let provider = 'vllm';
-                        if (model.toLowerCase().includes('gemini')) provider = 'google';
-                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
-                        option.textContent = `${provider} - ${model}`;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                    if (current && data.models.includes(current)) {
-                        select.value = current;
-                    }
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
-            }
+            // Model selection is managed natively by the OpenCode session.
+            const select = document.getElementById('globalModelSelect');
+            if (select) select.style.display = 'none';
         }
 
         async function loadAgentConfig() {
-            try {
-                const res = await fetch('/api/agent-config');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    document.getElementById('geminiApiKey').value = data.config.GEMINI_API_KEY || '';
-                    document.getElementById('anthropicApiKey').value = data.config.ANTHROPIC_API_KEY || '';
-                    document.getElementById('vllmApiUrl').value = data.config.VLLM_API_URL || '';
-                    document.getElementById('vllmDefaultModel').value = data.config.VLLM_DEFAULT_MODEL || 'devstral';
-
-                    const backendStatus = [];
-                    if (data.available_backends.gemini) backendStatus.push('Gemini: configured');
-                    else backendStatus.push('Gemini: not configured');
-                    if (data.available_backends.anthropic) backendStatus.push('Anthropic: configured');
-                    else backendStatus.push('Anthropic: not configured');
-                    if (data.available_backends.vllm) backendStatus.push('VLLM: configured');
-                    else backendStatus.push('VLLM: not configured');
-                    document.getElementById('backendStatus').textContent = backendStatus.join(' · ');
-                }
-            } catch (err) {
-                console.error('Could not load agent config', err);
-                setAgentConfigFeedback('Failed to load agent configuration.', true);
-            }
+            // Config is managed by the OpenCode server; no API keys needed here.
+            const backendStatus = document.getElementById('backendStatus');
+            if (backendStatus) backendStatus.textContent = 'OpenCode server at 127.0.0.1:4096';
         }
 
         async function saveAgentConfig() {
-            const payload = {
-                config: {
-                    GEMINI_API_KEY: document.getElementById('geminiApiKey').value.trim(),
-                    ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
-                    VLLM_API_URL: document.getElementById('vllmApiUrl').value.trim(),
-                    VLLM_DEFAULT_MODEL: document.getElementById('vllmDefaultModel').value.trim() || 'devstral'
-                }
-            };
-
-            try {
-                const res = await fetch('/api/agent-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    setAgentConfigFeedback('Agent settings saved successfully.');
-                    await loadAgentConfig();
-                    await refreshModelSelect();
-                } else {
-                    setAgentConfigFeedback(result.message || 'Failed to save agent settings.', true);
-                }
-            } catch (err) {
-                setAgentConfigFeedback('Failed to save agent settings.', true);
-                console.error('saveAgentConfig error', err);
-            }
+            closeAgentConfigModal();
         }
 
         // Modal open/close for agent configuration
@@ -936,7 +840,6 @@
         async function sendTerminalMessage(){
             const input = document.getElementById('terminalInput');
             const out = document.getElementById('terminalOutput');
-            const modelSelect = document.getElementById('globalModelSelect');
             if(!input || !out) return;
             const msg = input.value.trim();
             if(!msg) return;
@@ -945,26 +848,31 @@
             out.scrollTop = out.scrollHeight;
             try {
                 setLoading(true, 'btn-send');
-                const payload = { command: 'task-explore', data: { context: msg, references: activeReferences, model: modelSelect?modelSelect.value:undefined } };
-                const res = await fetch('/api/agent', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-                const r = await res.json();
-                if(r.status==='success'){
-                    out.textContent += '\n\n> Agent:\n' + (r.response || JSON.stringify(r, null, 2));
-                    logDebug(`AGENT (explore): ${r.response? r.response.slice(0,200):''}`);
-                } else {
-                    out.textContent += '\n\nERROR: '+(r.message||'unknown');
-                }
+                const sessionId = await ocGetOrCreateSessionId();
+                const lang = localStorage.getItem('app_lang') || 'en';
+                const prompt = ocBuildExplorePrompt(msg, activeReferences, lang);
+                await ocSendPrompt(sessionId, prompt);
+                logDebug('Sent explore prompt. Waiting for agent response...');
+                const result = await ocPollForCompletion(sessionId, 'task_explore', (chunk) => {
+                    const pre = document.getElementById('globalDebug');
+                    if (pre) pre.textContent = chunk.slice(0, 2000);
+                });
+                const insights = result?.explore?.insights || [];
+                const displayText = insights.length
+                    ? insights.map((ins, i) => `${i+1}. ${ins}`).join('\n\n')
+                    : JSON.stringify(result, null, 2);
+                out.textContent += '\n\n> Agent:\n' + displayText;
+                logDebug('Explore complete.');
             } catch(e){
-                out.textContent += '\n\nNETWORK ERROR: '+e.message;
+                out.textContent += '\n\nERROR: '+e.message;
+                logDebug('Error: ' + e.message);
             } finally { 
                 setLoading(false, 'btn-send'); 
                 out.scrollTop = out.scrollHeight;
             }
         }
 
-        // Start polling debug logs
-        fetchDebugLogs();
-        setInterval(fetchDebugLogs, 3000);
+        // No polling needed; debug logs are written directly via ocLogDebug.
 
         function autoResizeTextarea(el) {
             el.style.height = 'auto';
@@ -979,7 +887,10 @@
 
 
     </script>
+    <script src="/opencode_client.js"></script>
     <script src="/sessions.js"></script>
+    <script src="/terminal_input.js"></script>
+    <script src="/keyboard_shortcuts.js"></script>
 
     <!-- Floating Debug Console -->
     <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>

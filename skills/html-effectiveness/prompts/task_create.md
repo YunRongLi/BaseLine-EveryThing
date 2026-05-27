@@ -24,10 +24,10 @@ You MUST respond ONLY with a JSON block matching this exact schema:
         ]
       }}
     ],
-    "open_questions": [
-      "Clarifying Question 1 (use bullet points and bolding if helpful)",
-      "Clarifying Question 2"
-    ]
+    "open_questions": {{
+      "Clarifying Question 1 (use bullet points and bolding if helpful)": "",
+      "Clarifying Question 2": ""
+    }}
   }},
   "event_type": "task_create",
   "needs_references": "<boolean: true if you need to read lazy-loaded files>",

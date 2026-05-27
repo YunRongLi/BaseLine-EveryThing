@@ -703,105 +703,21 @@
         }
 
         async function refreshModelSelect() {
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    if (data.server_instance_id) {
-                        const savedInstanceId = localStorage.getItem('server_instance_id');
-                        if (savedInstanceId && savedInstanceId !== data.server_instance_id) {
-                            // Server restarted! Clear task_scoping fields
-                            const fields = ['title', 'category', 'goal', 'context'];
-                            fields.forEach(id => {
-                                localStorage.removeItem('task_scoping_' + id);
-                                const el = document.getElementById(id);
-                                if (el) {
-                                    if (id === 'category') el.value = 'Feature';
-                                    else el.value = '';
-                                }
-                            });
-                        }
-                        localStorage.setItem('server_instance_id', data.server_instance_id);
-                    }
-
-                    const select = document.getElementById('globalModelSelect');
-                    if (!select) return;
-                    const current = select.value;
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        let provider = 'vllm';
-                        if (model.toLowerCase().includes('gemini')) provider = 'google';
-                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
-                        option.textContent = `${provider} - ${model}`;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                    if (current && data.models.includes(current)) {
-                        select.value = current;
-                    }
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
-                logDebug('ERROR: Could not load models. ' + err.message);
+            // Models are handled natively by OpenCode extension config
+            const select = document.getElementById('globalModelSelect');
+            if (select) {
+                select.innerHTML = '<option value="opencode-native" selected>OpenCode Native Model</option>';
             }
         }
 
         async function loadAgentConfig() {
-            try {
-                const res = await fetch('/api/agent-config');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    document.getElementById('geminiApiKey').value = data.config.GEMINI_API_KEY || '';
-                    document.getElementById('anthropicApiKey').value = data.config.ANTHROPIC_API_KEY || '';
-                    document.getElementById('vllmApiUrl').value = data.config.VLLM_API_URL || '';
-                    document.getElementById('vllmDefaultModel').value = data.config.VLLM_DEFAULT_MODEL || 'devstral';
-
-                    const backendStatus = [];
-                    if (data.available_backends.gemini) backendStatus.push('Gemini: configured');
-                    else backendStatus.push('Gemini: not configured');
-                    if (data.available_backends.anthropic) backendStatus.push('Anthropic: configured');
-                    else backendStatus.push('Anthropic: not configured');
-                    if (data.available_backends.vllm) backendStatus.push('VLLM: configured');
-                    else backendStatus.push('VLLM: not configured');
-                    document.getElementById('backendStatus').textContent = backendStatus.join(' · ');
-                }
-            } catch (err) {
-                console.error('Could not load agent config', err);
-                setAgentConfigFeedback('Failed to load agent configuration.', true);
-            }
+            // Deprecated in OpenCode mode
+            const status = document.getElementById('backendStatus');
+            if (status) status.textContent = 'OpenCode Native API Active';
         }
 
         async function saveAgentConfig() {
-            const payload = {
-                config: {
-                    GEMINI_API_KEY: document.getElementById('geminiApiKey').value.trim(),
-                    ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
-                    VLLM_API_URL: document.getElementById('vllmApiUrl').value.trim(),
-                    VLLM_DEFAULT_MODEL: document.getElementById('vllmDefaultModel').value.trim() || 'devstral'
-                }
-            };
-
-            try {
-                const res = await fetch('/api/agent-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    setAgentConfigFeedback('Agent settings saved successfully.');
-                    await loadAgentConfig();
-                    await refreshModelSelect();
-                } else {
-                    setAgentConfigFeedback(result.message || 'Failed to save agent settings.', true);
-                }
-            } catch (err) {
-                setAgentConfigFeedback('Failed to save agent settings.', true);
-                console.error('saveAgentConfig error', err);
-            }
+            setAgentConfigFeedback('Agent config is managed via OpenCode native settings in this mode.', false);
         }
 
         function openAgentConfigModal() {
@@ -841,30 +757,13 @@
         });
 
         async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    const dict = (typeof i18n !== 'undefined') ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
-                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    if (pre.textContent !== newText) {
-                        pre.textContent = newText;
-                        pre.scrollTop = pre.scrollHeight;
-                    }
-                }
-            } catch (e) {}
+            // Logs are now handled completely client-side in this template.
         }
 
         async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
-                });
-                await fetchDebugLogs();
-            } catch (e) {
+            if (typeof ocLogDebug === 'function') {
+                ocLogDebug(message);
+            } else {
                 const pre = document.getElementById('globalDebug');
                 if (pre) {
                     pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
@@ -896,22 +795,27 @@
             logDebug(`Sending 'task-create' request using model ${data.model}...`);
 
             try {
-                const res = await fetch('/api/agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'task-create', data })
+                const sessionId = await ocGetOrCreateSessionId();
+                const prompt = ocBuildCreatePrompt(data.title, data.category, data.goal, data.context, [], data.language);
+                await ocSendPrompt(sessionId, prompt);
+                const result = await ocPollForCompletion(sessionId, 'task_create', (chunk) => {
+                    logDebug("Agent response chunk received...");
                 });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-create):\n` + result.response);
-                    logDebug(`Generating your specification UI...`);
-                    sessionStorage.setItem('activeTab', 'spec');
-                    setTimeout(() => {
-                        window.location.href = '/spec';
-                    }, 1500);
-                } else {
-                    logDebug(`ERROR (task-create):\n` + (result.message || 'Unknown error'));
-                }
+                
+                logDebug(`SUCCESS (task-create):\n` + JSON.stringify(result, null, 2));
+                logDebug(`Generating your specification UI...`);
+                sessionStorage.setItem('activeTab', 'spec');
+                
+                // Save to local state
+                const st = await ocLoadState();
+                st.create_data = data;
+                st.spec_data = result.spec || {};
+                st.current_stage = 'spec';
+                await ocSaveState(st);
+
+                setTimeout(() => {
+                    window.location.href = '/spec';
+                }, 1500);
             } catch (err) {
                 logDebug(`NETWORK ERROR (task-create):\n` + err.message);
             } finally {
@@ -1184,16 +1088,12 @@ ${context}`;
             input.value = '';
             try {
                 setLoading(true, null);
-                const payload = { command: 'chat', data: { messages: [{ role:'user', content: msg }], model: modelSelect?modelSelect.value:undefined } };
-                const res = await fetch('/api/agent', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-                const data = await res.json();
-                if(data.error) {
-                    appendAgentOutput('Error: ' + data.error);
-                } else if(data.response) {
-                    appendAgentOutput(data.response);
-                } else {
-                    appendAgentOutput(JSON.stringify(data));
-                }
+                const sessionId = await ocGetOrCreateSessionId();
+                const lang = localStorage.getItem('app_lang') || 'en';
+                const prompt = ocBuildChatPrompt(msg, lang);
+                await ocSendPrompt(sessionId, prompt);
+                const result = await ocPollForCompletion(sessionId, 'chat', null);
+                appendAgentOutput(result?.chat || JSON.stringify(result, null, 2));
             } catch(e) {
                 appendAgentOutput('Error: ' + e.message);
             } finally {
@@ -1201,7 +1101,10 @@ ${context}`;
             }
         }
     </script>
+    <script src="/opencode_client.js"></script>
     <script src="/sessions.js"></script>
+    <script src="/terminal_input.js"></script>
+    <script src="/keyboard_shortcuts.js"></script>
 
     <!-- Floating Debug Console -->
     <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>

@@ -29,7 +29,7 @@ You MUST respond ONLY with a JSON block in this schema:
         "code": "..."
       }}
     ],
-    "open_questions": ["Question 1...", "Question 2..."]
+    "open_questions": {{ "Question 1...": "", "Question 2...": "" }}
   }},
   "event_type": "task_develop_update",
   "needs_references": "<boolean: true if you need to read lazy-loaded files>",

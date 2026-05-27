@@ -18,7 +18,7 @@ You MUST respond ONLY with a JSON block in this schema:
         "items": ["Item 1 (use basic markdown like bold text if helpful)", "Clean text item 2"]
       }}
     ],
-    "open_questions": ["Question 1", "Question 2"]
+    "open_questions": {{ "Question 1": "", "Question 2": "" }}
   }},
   "event_type": "task_spec_update",
   "needs_references": "<boolean: true if you need to read lazy-loaded files>",
