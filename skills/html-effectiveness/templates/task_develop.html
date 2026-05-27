@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent - Prototype & Execution</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <title>Agent - Develop & Execution</title>
     <style>
         :root {
             --ivory: #FAF9F5;
@@ -112,17 +111,7 @@
             padding: 0 1.5rem;
         }
 
-        .layout-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 2rem;
-        }
 
-        @media (min-width: 900px) {
-            .layout-grid {
-                grid-template-columns: 3fr 2fr;
-            }
-        }
 
         .card {
             background-color: var(--paper);
@@ -446,33 +435,7 @@
             flex: 1;
         }
 
-        .debug-console {
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 400px;
-            height: 100vh;
-            background-color: var(--paper);
-            border-left: 1.5px solid var(--gray-200);
-            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            resize: horizontal;
-            direction: rtl;
-            overflow: auto;
-        }
 
-        .debug-console > * {
-            direction: ltr;
-        }
-
-        .debug-console.open {
-            transform: translateX(0);
-        }
 
         .debug-pre {
             background: var(--slate);
@@ -653,6 +616,119 @@
             padding: 0;
             border-radius: 0;
         }
+    /* Layout and modal styles */
+        .layout-grid { 
+            width: 100%; 
+            align-items: start;
+            grid-template-columns: 75% 25%;
+            transition: grid-template-columns 0.3s ease;
+        }
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+        .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .main-panel > .card { flex: 1; }
+        .side-panel { 
+            position: sticky;
+            top: 2rem;
+            max-height: calc(100vh - 4rem);
+            display: flex;
+            flex-direction: column;
+            min-height: 240px; 
+            width:100%; 
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .debug-panel { width:100%; }
+        .debug-pre { overflow-y: hidden; }
+        .debug-pre:hover { overflow-y: auto; }
+        .agent-panel { width:100%; }
+        
+        /* Hide content when collapsed, show only button */
+        .side-panel.collapsed { 
+            padding:0 !important;
+            min-height: 56px;
+            max-height: 56px;
+        }
+        
+        .side-panel.collapsed .debug-pre,
+        .side-panel.collapsed #agentOutput,
+        .side-panel.collapsed textarea,
+        .side-panel.collapsed label,
+        .side-panel.collapsed #debug-status,
+        .side-panel.collapsed #agent-status { 
+            display:none; 
+        }
+        
+        /* Collapsed button styling */
+        .side-panel.collapsed #btn-toggle-debug,
+        .side-panel.collapsed #btn-toggle-agent { 
+            padding:0 !important; 
+            width:48px !important; 
+            height:48px !important; 
+            display:flex !important; 
+            align-items:center; 
+            justify-content:center; 
+            font-weight:bold;
+            font-size:1.4rem;
+            line-height:1;
+        }
+        
+        /* Grid layout adjustments based on collapsed state */
+        .layout-grid.agent-collapsed {
+            grid-template-columns: 1fr 64px !important;
+        }
+        
+        .modal-content { max-height: 90vh; overflow:auto; }
+
+        @media (max-width: 900px) {
+            .layout-grid { grid-template-columns: 1fr !important; }
+            .side-panel { width:100% !important; }
+        }
+    
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 35vh;
+            background-color: var(--paper);
+            border-top: 1.5px solid var(--gray-200);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            resize: vertical;
+            direction: ltr;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        .debug-console.open {
+            transform: translateY(0);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            flex: 1;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
     </style>
 </head>
 <body>
@@ -660,9 +736,10 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
+            <a href="/explore" id="nav-explore" class="nav-link" data-i18n="navExplore">0. Explore</a>
             <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
             <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
-            <a href="/prototype" id="nav-prototype" class="nav-link active" data-i18n="navPrototype">3. Prototype</a>
+            <a href="/develop" id="nav-develop" class="nav-link active" data-i18n="navDevelop">3. Develop</a>
             <a href="/testing" id="nav-testing" class="nav-link" data-i18n="navTesting">4. Test & Regression</a>
         </div>
         <div class="nav-right">
@@ -673,14 +750,58 @@
                 <option value="en">EN</option>
                 <option value="zh">中文</option>
             </select>
+            <button id="btn-configure" class="btn btn-secondary" onclick="openAgentConfigModal()" style="white-space:nowrap;">Configure</button>
         </div>
     </nav>
 
-    <div class="container">
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+        <!-- Main Card (left) -->
+
+        <div class="main-panel">
         <!-- Placeholder View -->
         <div id="view-placeholder" class="placeholder-card" style="display:none;">
-            <h2 data-i18n="protoTitle">Prototyping & Architecture Stage</h2>
-            <p data-i18n="protoDesc">No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.</p>
+            <h2 data-i18n="developTitle">Prototyping & Architecture Stage</h2>
+            <p data-i18n="developDesc">No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.</p>
             <a href="/spec" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="btnGoBack">Go to Spec Tab</a>
         </div>
 
@@ -697,7 +818,7 @@
                 <div id="completedSummaryList" class="completed-list"></div>
             </div>
 
-            <div class="layout-grid">
+            <div class="content-grid">
                 <div class="card">
                     <div class="eyebrow" data-i18n="eyebrowFiles">Written Files</div>
                     <h2 data-i18n="titleFiles">Files Created/Modified</h2>
@@ -716,8 +837,29 @@
             </div>
         </div>
 
-        <!-- Main Prototype Grid -->
-        <div id="view-main" class="layout-grid" style="display:none;">
+        <!-- Main Develop Grid -->
+        <div id="view-main" class="content-grid" style="display:none;">
+            <!-- Top Column (100% width): Context Summary -->
+            <div class="card" style="grid-column: 1 / -1; padding: 1.5rem; margin-bottom: 0rem;">
+                <div class="eyebrow" data-i18n="eyebrowMeta">Context Summary</div>
+                <div class="metadata-box" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div style="display: flex; gap: 2rem;">
+                        <div>
+                            <strong data-i18n="lblMetaTitle" style="margin-right: 0.5rem;">Title:</strong>
+                            <span id="metaTitle">None</span>
+                        </div>
+                        <div>
+                            <strong data-i18n="lblMetaCategory" style="margin-right: 0.5rem;">Category:</strong>
+                            <span id="metaCategory">None</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.25rem;">
+                        <strong data-i18n="lblMetaGoal" style="display: block; margin-bottom: 0.25rem;">Goal</strong>
+                        <div id="metaGoal" class="rendered-markdown">None</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Left Column: Visual Structured List Editors -->
             <div>
                 <!-- File tree list editor -->
@@ -752,8 +894,8 @@
                 <div id="snippetsContainer"></div>
                 
                 <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem;">
-                    <button type="button" class="btn btn-secondary" id="btn-copy-proto" onclick="copyPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopyProto">Copy Prototype as Markdown</button>
-                    <button type="button" class="btn btn-secondary" id="btn-export-proto" onclick="exportPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportProto">Export Prototype as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-copy-proto" onclick="copyDevelopMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopyDevelop">Copy Develop as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-export-proto" onclick="exportDevelopMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportDevelop">Export Develop as Markdown</button>
                     <button type="button" class="btn btn-secondary" id="btn-export-json" onclick="exportStateJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportJSON">Export State as JSON</button>
                     <button type="button" class="btn btn-secondary" id="btn-import-json" onclick="triggerImportJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnImportJSON">Import State from JSON</button>
                     <input type="file" id="import-json-file" accept=".json" onchange="handleImportJSON(event)" style="display: none;">
@@ -762,24 +904,6 @@
 
             <!-- Right Column: Metadata, References, Answering Questions & Actions -->
             <div>
-                <div class="card" style="padding: 1.5rem;">
-                    <div class="eyebrow" data-i18n="eyebrowMeta">Context Summary</div>
-                    <div class="metadata-box">
-                        <div>
-                            <strong data-i18n="lblMetaTitle">Title</strong>
-                            <span id="metaTitle">None</span>
-                        </div>
-                        <div>
-                            <strong data-i18n="lblMetaCategory">Category</strong>
-                            <span id="metaCategory">None</span>
-                        </div>
-                        <div style="margin-top: 1rem;">
-                            <strong data-i18n="lblMetaGoal">Goal</strong>
-                            <div id="metaGoal" class="rendered-markdown">None</div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- References Panel Card -->
                 <div class="card" style="padding: 1.5rem;">
                     <div class="eyebrow" data-i18n="eyebrowReferences">Reference Materials</div>
@@ -813,26 +937,39 @@
                         <textarea id="feedbackInput" rows="5" data-i18n-ph="phFeedbackInput" placeholder="Provide implementation feedback or click Finalize & Execute to write changes..."></textarea>
                     </div>
                     <div class="btn-row" style="flex-direction: column;">
-                        <button type="button" class="btn btn-secondary btn-full" id="btn-update-proto" onclick="handleAgentCall(true)" data-i18n="btnUpdateProto">Update Prototype</button>
+                        <button type="button" class="btn btn-secondary btn-full" id="btn-update-proto" onclick="handleAgentCall(true)" data-i18n="btnUpdateDevelop">Update Develop</button>
                         <button type="button" class="btn btn-accent btn-full" id="btn-finalize" onclick="handleAgentCall(false)" data-i18n="btnFinalize">Finalize & Execute</button>
                     </div>
                 </div>
             </div>
         </div>
+        </div>
 
-        <!-- Debug Console -->
-        <button class="debug-toggle-btn" onclick="document.querySelector('.debug-console').classList.toggle('open')">Debug</button>
-        <div class="debug-console">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
+        <!-- Agent Console (Right side panel) -->
+        <div class="side-panel agent-panel card" id="agentPanel" style="display:flex; flex-direction:column; padding:1.5rem; margin-bottom: 0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgent">AI Assistant</div>
+                    <h2 style="font-size:1.15rem; margin:0;" data-i18n="titleAgent">Agent Console</h2>
+                </div>
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
-                        <div class="spinner"></div> <span data-i18n="processing">Processing...</span>
+                        <div class="spinner"></div>
                     </div>
-                    <button type="button" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; color: var(--gray-500); padding: 0;" onclick="document.querySelector('.debug-console').classList.remove('open')">&times;</button>
+                    <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
+                    <button id="btn-toggle-agent" type="button" onclick="toggleAgentPanel()" style="background:none; border:none; cursor:pointer; color:var(--gray-500); font-size:1.2rem; padding:0;">&minus;</button>
                 </div>
             </div>
-            <pre id="globalDebug" class="debug-pre" >Ready. Waiting for user interaction...</pre>
+            
+            <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.875rem; margin-bottom:1rem;"></div>
+            
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <textarea id="agentInput" rows="3" placeholder="Message to agent..." style="width:100%; font-size:0.875rem; padding:0.5rem;"></textarea>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary btn-full" style="padding:0.5rem; font-size:0.875rem;" onclick="sendAgentMessage()">Send</button>
+                    <button class="btn btn-secondary" style="padding:0.5rem; font-size:0.875rem;" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -842,11 +979,11 @@
                 brandSpan: 'Workflow',
                 navCreate: '1. Create',
                 navSpec: '2. Spec',
-                navPrototype: '3. Prototype',
+                navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 modelLoading: 'Loading models...',
-                protoTitle: 'Prototyping & Architecture Stage',
-                protoDesc: 'No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.',
+                developTitle: 'Prototyping & Architecture Stage',
+                developDesc: 'No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.',
                 btnGoBack: 'Go to Spec Tab',
                 titleCompleted: 'Task Finalized & Implemented',
                 descCompleted: 'The agent has successfully applied modifications and written the final files into the workspace.',
@@ -863,8 +1000,8 @@
                 titleWorkflow: 'Workflow & Process Description',
                 titleSnippets: 'Core Implementation Snippets',
                 btnAddSnippet: '+ Add File Code',
-                btnCopyProto: 'Copy Prototype as Markdown',
-                btnExportProto: 'Export Prototype as Markdown',
+                btnCopyDevelop: 'Copy Develop as Markdown',
+                btnExportDevelop: 'Export Develop as Markdown',
                 eyebrowReferences: 'Reference Materials',
                 lblReferences: 'Import Reference Documents & Code',
                 btnAddRef: 'Import',
@@ -877,7 +1014,7 @@
                 titleAction: 'Submit Feedback or Execute',
                 lblFeedbackInput: 'Implementation Feedback or Custom Commands',
                 phFeedbackInput: 'Provide implementation feedback or click Finalize & Execute to write changes...',
-                btnUpdateProto: 'Update Prototype',
+                btnUpdateDevelop: 'Update Develop',
                 btnFinalize: 'Finalize & Execute',
                 consoleTitle: 'System Console & AI Output',
                 processing: 'Processing...',
@@ -890,11 +1027,11 @@
                 brandSpan: '工作流',
                 navCreate: '1. 建立',
                 navSpec: '2. 規格',
-                navPrototype: '3. 原型',
+                navDevelop: '3. 原型',
                 navTesting: '4. 測試與回歸',
                 modelLoading: '載入模型中...',
-                protoTitle: '原型與架構階段',
-                protoDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認規格，並點擊「產生原型」。',
+                developTitle: '原型與架構階段',
+                developDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認規格，並點擊「產生原型」。',
                 btnGoBack: '前往「規格」分頁',
                 titleCompleted: '任務執行成功且已完成',
                 descCompleted: 'Agent 已經成功套用程式變更，並將最終程式碼寫入工作區中。',
@@ -911,8 +1048,8 @@
                 titleWorkflow: '了解原型運行流程與步驟',
                 titleSnippets: '核心實作程式碼片段',
                 btnAddSnippet: '+ 新增檔案程式碼',
-                btnCopyProto: '複製原型 (Markdown 格式)',
-                btnExportProto: '匯出原型 (Markdown 格式)',
+                btnCopyDevelop: '複製原型 (Markdown 格式)',
+                btnExportDevelop: '匯出原型 (Markdown 格式)',
                 eyebrowReferences: '參考資料匯入',
                 lblReferences: '匯入參考文件與程式碼',
                 btnAddRef: '匯入',
@@ -925,7 +1062,7 @@
                 titleAction: '提交反饋或執行程式寫入',
                 lblFeedbackInput: '實作反饋、細節調整指令或特殊修改',
                 phFeedbackInput: '請在此輸入您的修改反饋，或直接點擊「確認並執行」將上述程式碼與架構套用至工作區...',
-                btnUpdateProto: '更新原型與程式碼',
+                btnUpdateDevelop: '更新原型與程式碼',
                 btnFinalize: '確認並執行寫入',
                 consoleTitle: '系統終端與 AI 輸出',
                 processing: '處理中...',
@@ -967,7 +1104,7 @@
             });
         }
 
-        function generatePrototypeMarkdownText() {
+        function generateDevelopMarkdownText() {
             const file_tree = gatherFiles();
             const workflow_steps = gatherSteps();
             const code_snippets = gatherSnippets();
@@ -977,7 +1114,7 @@
             const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
             const category = categoryElement && categoryElement.textContent !== 'None' ? categoryElement.textContent : 'Feature';
             
-            let markdown = `# Task Prototype: ${title}\n\n- **Category:** ${category}\n\n`;
+            let markdown = `# Task Develop: ${title}\n\n- **Category:** ${category}\n\n`;
             
             markdown += `## Architecture Tree\n`;
             if (file_tree.length > 0) {
@@ -1010,8 +1147,8 @@
             return markdown;
         }
 
-        function copyPrototypeMarkdown() {
-            const markdown = generatePrototypeMarkdownText();
+        function copyDevelopMarkdown() {
+            const markdown = generateDevelopMarkdownText();
             const btn = document.getElementById('btn-copy-proto');
             navigator.clipboard.writeText(markdown).then(() => {
                 const originalText = btn.textContent;
@@ -1021,12 +1158,12 @@
             });
         }
 
-        function exportPrototypeMarkdown() {
-            const md = generatePrototypeMarkdownText();
+        function exportDevelopMarkdown() {
+            const md = generateDevelopMarkdownText();
             const titleElement = document.getElementById('metaTitle');
             const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
             const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
-            const filename = `${safeTitle}_prototype.md`;
+            const filename = `${safeTitle}_develop.md`;
             
             const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -1081,37 +1218,8 @@
             }
         }
 
-        async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    if (data.logs) {
-                        pre.textContent = data.logs;
-                    } else {
-                        const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                        pre.textContent = dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    }
-                }
-            } catch (e) {}
-        }
-
-        async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
-                });
-                await fetchDebugLogs();
-            } catch (e) {
-                const pre = document.getElementById('globalDebug');
-                if (pre) {
-                    pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
-                }
-            }
-        }
+        async function fetchDebugLogs() { /* replaced by ocLogDebug */ }
+        function logDebug(message) { ocLogDebug(message); }
 
         function setLoading(isLoading, btnId) {
             const indicator = document.getElementById('loading-indicator');
@@ -1233,6 +1341,16 @@
             return list;
         }
 
+        function gatherOpenQuestions() {
+            const questionsObj = {};
+            document.querySelectorAll('.question-answer-input').forEach(textarea => {
+                const q = decodeURIComponent(textarea.getAttribute('data-question'));
+                const a = textarea.value;
+                questionsObj[q] = a;
+            });
+            return questionsObj;
+        }
+
         function toggleCollapse(card) {
             const content = card.querySelector('.collapsible-content');
             const btn = card.querySelector('.btn-collapse');
@@ -1286,7 +1404,7 @@
                         document.getElementById('metaTitle').textContent = state.create_data.title;
                         document.getElementById('metaCategory').textContent = state.create_data.category;
                         if (state.create_data.goal) {
-                            document.getElementById('metaGoal').innerHTML = marked.parse(state.create_data.goal);
+                            document.getElementById('metaGoal').innerHTML = parseMarkdown(state.create_data.goal);
                         } else {
                             document.getElementById('metaGoal').textContent = "None";
                         }
@@ -1327,12 +1445,12 @@
                             verifyContainer.appendChild(item);
                         });
                         
-                    } else if (state.prototype_data && state.prototype_data.workflow_steps && state.prototype_data.workflow_steps.length > 0) {
+                    } else if (state.develop_data && state.develop_data.workflow_steps && state.develop_data.workflow_steps.length > 0) {
                         // Render Main Editor View
                         document.getElementById('view-main').style.display = 'grid';
                         
                         // Render File tree structured items
-                        const files = state.prototype_data.file_tree || [];
+                        const files = state.develop_data.file_tree || [];
                         const fContainer = document.getElementById('filesContainer');
                         fContainer.innerHTML = '';
                         if (files.length > 0) {
@@ -1342,7 +1460,7 @@
                         }
                         
                         // Render Workflow steps structured items
-                        const steps = state.prototype_data.workflow_steps || [];
+                        const steps = state.develop_data.workflow_steps || [];
                         const sContainer = document.getElementById('stepsContainer');
                         sContainer.innerHTML = '';
                         if (steps.length > 0) {
@@ -1352,7 +1470,7 @@
                         }
                         
                         // Render Code Snippets dynamic cards
-                        const snippets = state.prototype_data.code_snippets || [];
+                        const snippets = state.develop_data.code_snippets || [];
                         const snContainer = document.getElementById('snippetsContainer');
                         snContainer.innerHTML = '';
                         snippets.forEach(s => addSnippetCard(s.filename, s.language, s.code));
@@ -1360,13 +1478,25 @@
                         // Render open questions
                         const qContainer = document.getElementById('questionsContainer');
                         qContainer.innerHTML = '';
-                        const questions = state.prototype_data.open_questions || [];
-                        if (questions.length > 0) {
-                            questions.forEach((q, idx) => {
+                        const questions = state.develop_data.open_questions || {};
+                        let questionsObj = {};
+                        if (Array.isArray(questions)) {
+                            questions.forEach(q => {
+                                questionsObj[q] = "";
+                            });
+                        } else if (questions && typeof questions === 'object') {
+                            questionsObj = questions;
+                        }
+
+                        const entries = Object.entries(questionsObj);
+                        if (entries.length > 0) {
+                            entries.forEach(([q, a], idx) => {
                                 const qCard = document.createElement('div');
                                 qCard.className = 'question-card';
+                                qCard.style.marginBottom = '1.25rem';
                                 qCard.innerHTML = `
-                                    <div class="question-label">[Question / 問題 ${idx + 1}] ${q}</div>
+                                    <div class="question-label" style="font-weight: 600; margin-bottom: 0.25rem;">[Question / 問題 ${idx + 1}] ${q}</div>
+                                    <textarea class="question-answer-input" data-question="${encodeURIComponent(q)}" rows="2" style="width: 100%; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem; font-family: inherit; font-size: 0.875rem; resize: vertical;" placeholder="Type your answer here... / 請在此輸入您的回答...">${a || ''}</textarea>
                                 `;
                                 qContainer.appendChild(qCard);
                             });
@@ -1386,74 +1516,90 @@
                 logDebug('ERROR: Could not load active workflow state.');
             }
 
-            // Fetch models
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    const select = document.getElementById('globalModelSelect');
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        option.textContent = model;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
-            }
+            await loadAgentConfig();
+            await refreshModelSelect();
         });
+
+        function setAgentConfigFeedback(message, isError = false) {
+            const feedback = document.getElementById('agentConfigFeedback');
+            if (!feedback) return;
+            feedback.textContent = message;
+            feedback.style.color = isError ? 'var(--red)' : 'var(--olive)';
+        }
+
+        async function refreshModelSelect() {
+            const select = document.getElementById('globalModelSelect');
+            if (select) select.style.display = 'none';
+        }
+        async function loadAgentConfig() {
+            const backendStatus = document.getElementById('backendStatus');
+            if (backendStatus) backendStatus.textContent = 'OpenCode server at 127.0.0.1:4096';
+        }
+        async function saveAgentConfig() { closeAgentConfigModal(); }
+
+        function openAgentConfigModal() {
+            const modal = document.getElementById('agentConfigModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                loadAgentConfig();
+            }
+        }
+        function closeAgentConfigModal() {
+            const modal = document.getElementById('agentConfigModal');
+            if (modal) modal.style.display = 'none';
+        }
 
         async function handleAgentCall(isUpdate) {
             const btnId = isUpdate ? 'btn-update-proto' : 'btn-finalize';
             setLoading(true, btnId);
 
-            const file_tree = gatherFiles();
+            const file_tree      = gatherFiles();
             const workflow_steps = gatherSteps();
-            const code_snippets = gatherSnippets();
-            const feedback_input = document.getElementById('feedbackInput').value;
-            const workspace_path = document.getElementById('workspacePath') ? document.getElementById('workspacePath').value.trim() : './';
-            localStorage.setItem('workspace_path', workspace_path);
-            const modelSelect = document.getElementById('globalModelSelect');
-            
-            const payload = {
-                command: 'task-prototype',
-                data: {
-                    is_update: isUpdate,
-                    file_tree: file_tree,
-                    workflow_steps: workflow_steps,
-                    code_snippets: code_snippets,
-                    feedback_input: feedback_input,
-                    workspace_path: workspace_path,
-                    references: activeReferences,
-                    language: localStorage.getItem('app_lang') || 'en',
-                    model: modelSelect ? modelSelect.value : 'gemini-3.1-flash-lite'
-                }
-            };
+            const code_snippets  = gatherSnippets();
+            const open_questions = gatherOpenQuestions();
+            const rawFeedback    = document.getElementById('feedbackInput').value;
+            const lang = localStorage.getItem('app_lang') || 'en';
 
-            logDebug(`Sending 'task-prototype' request (is_update=${isUpdate}) using model ${payload.data.model}...`);
+            let answersText = "";
+            Object.entries(open_questions).forEach(([q, a], idx) => {
+                if (a.trim()) {
+                    answersText += `- Question ${idx + 1}: "${q}"\n  Answer: "${a.trim()}"\n`;
+                }
+            });
+            const feedbackInput = answersText
+                ? `[User Answers to Open Questions]\n${answersText}\n[Additional Scoping/Feedback]\n${rawFeedback}`
+                : rawFeedback;
+
+            logDebug(`Sending develop request (isUpdate=${isUpdate}) via OpenCode...`);
 
             try {
-                const res = await fetch('/api/agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                const sessionId = await ocGetOrCreateSessionId();
+                const prompt = isUpdate
+                    ? ocBuildDevelopUpdatePrompt(workflow_steps, file_tree, code_snippets, feedbackInput, lang)
+                    : ocBuildDevelopFinalizePrompt(workflow_steps, file_tree, code_snippets, feedbackInput, lang);
+
+                await ocSendPrompt(sessionId, prompt);
+                await ocSaveState({ develop_data: { workflow_steps, file_tree, code_snippets, open_questions } });
+
+                const expectedEvent = isUpdate ? 'task_develop_update' : 'task_develop_finalize';
+                const result = await ocPollForCompletion(sessionId, expectedEvent, (chunk) => {
+                    const pre = document.getElementById('globalDebug');
+                    if (pre) pre.textContent = chunk.slice(0, 2000);
                 });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-prototype):\n` + result.response);
-                    logDebug(`Reloading page in 1.2 seconds to view updated solution...`);
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1200);
+
+                if (isUpdate && result?.develop) {
+                    await ocSaveState({ develop_data: result.develop });
+                    logDebug('Prototype updated. Reloading...');
+                    setTimeout(() => window.location.reload(), 800);
+                } else if (!isUpdate && result?.completed) {
+                    await ocSaveState({ completed_data: result.completed, current_stage: 'completed' });
+                    logDebug('Implementation complete. Reloading...');
+                    setTimeout(() => window.location.reload(), 800);
                 } else {
-                    logDebug(`ERROR (task-prototype):\n` + (result.message || 'Unknown error'));
+                    logDebug('Unexpected response: ' + JSON.stringify(result).slice(0, 200));
                 }
             } catch (err) {
-                logDebug(`NETWORK ERROR (task-prototype):\n` + err.message);
+                logDebug('ERROR (task-develop): ' + err.message);
             } finally {
                 setLoading(false, btnId);
             }
@@ -1469,9 +1615,9 @@
                 const data = await stateRes.json();
                 if (data.status === 'success') {
                     const state = data.state;
-                    state.prototype_data.file_tree = file_tree;
-                    state.prototype_data.workflow_steps = workflow_steps;
-                    state.prototype_data.code_snippets = code_snippets;
+                    state.develop_data.file_tree = file_tree;
+                    state.develop_data.workflow_steps = workflow_steps;
+                    state.develop_data.code_snippets = code_snippets;
                     
                     const title = state.create_data && state.create_data.title ? state.create_data.title : 'Task';
                     const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
@@ -1526,7 +1672,7 @@
                     if (result.status === 'success') {
                         logDebug("SUCCESS: State imported. Reloading page...");
                         setTimeout(() => {
-                            const newStage = importData.state.current_stage || 'prototype';
+                            const newStage = importData.state.current_stage || 'develop';
                             if (newStage === 'spec') {
                                 window.location.href = '/spec';
                             } else if (newStage === 'create' || newStage === 'completed') {
@@ -1544,6 +1690,244 @@
             };
             reader.readAsText(file);
         }
+
+        function toggleDebugConsole() {
+            const c = document.getElementById('debugConsole');
+            if (c) c.classList.toggle('open');
+        }
+        function toggleAgentPanel() {
+            const panel = document.getElementById('agentPanel');
+            const btn   = document.getElementById('btn-toggle-agent');
+            if (!panel) return;
+            panel.classList.toggle('collapsed');
+            if (btn) btn.textContent = panel.classList.contains('collapsed') ? '+' : '\u2212';
+            updateGridLayout();
+        }
+        function updateGridLayout() {
+            const agentCollapsed = document.getElementById('agentPanel')?.classList.contains('collapsed');
+            const grid = document.querySelector('.layout-grid');
+            if (!grid) return;
+            grid.classList.toggle('agent-collapsed', !!agentCollapsed);
+        }
+        function parseMarkdown(text) {
+            if (!text) return "";
+            
+            // 1. Escape HTML to prevent broken formatting with C++ templates like <int>
+            let html = text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;");
+            
+            // 2. Handle block code blocks before other replacements
+            const codeBlocks = [];
+            html = html.replace(/```(?:[a-zA-Z0-9+#-]+)?\n([\s\S]*?)\n```/g, function(match, code) {
+                codeBlocks.push(code);
+                return `__CODE_BLOCK_PLACEHOLDER_${codeBlocks.length - 1}__`;
+            });
+            
+            // 3. Inline code
+            html = html.replace(/`(.*?)`/g, "<code>$1</code>");
+            
+            // 4. Bold and Italic
+            html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+            html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+            
+            // 5. Headings
+            html = html.replace(/^#### (.*?)$/gm, "<h4>$1</h4>");
+            html = html.replace(/^### (.*?)$/gm, "<h3>$1</h3>");
+            html = html.replace(/^## (.*?)$/gm, "<h2>$1</h2>");
+            html = html.replace(/^# (.*?)$/gm, "<h1>$1</h1>");
+            
+            // 6. Horizontal rule
+            html = html.replace(/^---$/gm, "<hr>");
+            
+            // 7. Parse line by line for paragraphs and lists
+            const lines = html.split('\n');
+            let inList = false;
+            let listType = null;
+            let parsedLines = [];
+            
+            for (let line of lines) {
+                let trimmed = line.trim();
+                
+                // Unordered list item
+                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                    if (!inList || listType !== 'ul') {
+                        if (inList) parsedLines.push(`</${listType}>`);
+                        parsedLines.push('<ul>');
+                        inList = true;
+                        listType = 'ul';
+                    }
+                    parsedLines.push(`<li>${trimmed.substring(2)}</li>`);
+                } 
+                // Ordered list item
+                else if (/^\d+\.\s/.test(trimmed)) {
+                    let match = trimmed.match(/^(\d+)\.\s(.*)/);
+                    if (!inList || listType !== 'ol') {
+                        if (inList) parsedLines.push(`</${listType}>`);
+                        parsedLines.push('<ol>');
+                        inList = true;
+                        listType = 'ol';
+                    }
+                    parsedLines.push(`<li>${match[2]}</li>`);
+                } 
+                // Non-list line
+                else {
+                    if (inList) {
+                        parsedLines.push(`</${listType}>`);
+                        inList = false;
+                        listType = null;
+                    }
+                    
+                    if (trimmed !== '') {
+                        if (trimmed.startsWith('<h') || trimmed.startsWith('<hr') || trimmed.startsWith('__CODE_BLOCK_PLACEHOLDER_')) {
+                            parsedLines.push(line);
+                        } else {
+                            parsedLines.push(`<p>${line}</p>`);
+                        }
+                    } else {
+                        parsedLines.push('');
+                    }
+                }
+            }
+            if (inList) {
+                parsedLines.push(`</${listType}>`);
+            }
+            
+            html = parsedLines.join('\n');
+            
+            // 8. Re-inject code blocks
+            for (let i = 0; i < codeBlocks.length; i++) {
+                html = html.replace(`__CODE_BLOCK_PLACEHOLDER_${i}__`, `<pre><code>${codeBlocks[i]}</code></pre>`);
+            }
+            
+            return html;
+        }
+
+        function appendAgentOutput(text) {
+            const out = document.getElementById('agentOutput');
+            if (!out) return;
+            
+            // Set sans-serif font for agentOutput container so it's readable
+            out.style.fontFamily = "var(--sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            out.style.fontSize = "0.875rem";
+            out.style.lineHeight = "1.5";
+            
+            const div = document.createElement('div');
+            div.style.marginBottom = "1.5rem";
+            div.style.borderBottom = "1px solid var(--gray-200)";
+            div.style.paddingBottom = "1rem";
+            
+            div.innerHTML = parseMarkdown(text);
+            
+            // Fine-tune styles of rendered children for aesthetics
+            const paragraphs = div.getElementsByTagName('p');
+            for (let p of paragraphs) {
+                p.style.marginBottom = "0.75rem";
+                p.style.lineHeight = "1.6";
+            }
+            const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            for (let h of headings) {
+                h.style.marginTop = "1rem";
+                h.style.marginBottom = "0.5rem";
+                h.style.color = "var(--slate)";
+                h.style.fontWeight = "600";
+            }
+            const lists = div.querySelectorAll('ul, ol');
+            for (let l of lists) {
+                l.style.marginLeft = "1.25rem";
+                l.style.marginBottom = "0.75rem";
+            }
+            const listItems = div.getElementsByTagName('li');
+            for (let li of listItems) {
+                li.style.marginBottom = "0.25rem";
+            }
+            const inlineCode = div.getElementsByTagName('code');
+            for (let c of inlineCode) {
+                c.style.fontFamily = "var(--mono)";
+                c.style.background = "var(--gray-200)";
+                c.style.padding = "0.1rem 0.3rem";
+                c.style.borderRadius = "4px";
+                c.style.fontSize = "0.8125rem";
+            }
+            const preBlocks = div.getElementsByTagName('pre');
+            for (let pb of preBlocks) {
+                pb.style.background = "var(--slate)";
+                pb.style.color = "var(--ivory)";
+                pb.style.padding = "0.75rem";
+                pb.style.borderRadius = "6px";
+                pb.style.overflowX = "auto";
+                pb.style.marginBottom = "0.75rem";
+                const preCode = pb.getElementsByTagName('code');
+                for (let pc of preCode) {
+                    pc.style.background = "transparent";
+                    pc.style.padding = "0";
+                }
+            }
+            const hrTags = div.getElementsByTagName('hr');
+            for (let hr of hrTags) {
+                hr.style.border = "none";
+                hr.style.borderTop = "1px solid var(--gray-200)";
+                hr.style.margin = "1rem 0";
+            }
+            const tables = div.getElementsByTagName('table');
+            for (let t of tables) {
+                t.style.width = "100%";
+                t.style.borderCollapse = "collapse";
+                t.style.marginBottom = "0.75rem";
+                t.style.fontSize = "0.8125rem";
+                const ths = t.getElementsByTagName('th');
+                for (let th of ths) {
+                    th.style.border = "1px solid var(--gray-200)";
+                    th.style.padding = "0.4rem";
+                    th.style.background = "var(--gray-50)";
+                    th.style.fontWeight = "600";
+                }
+                const tds = t.getElementsByTagName('td');
+                for (let td of tds) {
+                    td.style.border = "1px solid var(--gray-200)";
+                    td.style.padding = "0.4rem";
+                }
+            }
+            out.appendChild(div);
+            out.scrollTop = out.scrollHeight;
+        }
+        async function sendAgentMessage() {
+            const input = document.getElementById('agentInput');
+            if (!input) return;
+            const msg = input.value.trim();
+            if (!msg) return;
+            appendAgentOutput('> ' + msg);
+            input.value = '';
+            try {
+                setLoading(true, null);
+                const sessionId = await ocGetOrCreateSessionId();
+                const lang = localStorage.getItem('app_lang') || 'en';
+                const prompt = ocBuildChatPrompt(msg, lang);
+                await ocSendPrompt(sessionId, prompt);
+                const result = await ocPollForCompletion(sessionId, 'chat', null);
+                appendAgentOutput(result?.chat || JSON.stringify(result, null, 2));
+            } catch (e) {
+                appendAgentOutput('Error: ' + e.message);
+            } finally {
+                setLoading(false, null);
+            }
+        }
     </script>
+    <script src="/opencode_client.js"></script>
+    <script src="/sessions.js"></script>
+    <script src="/terminal_input.js"></script>
+    <script src="/keyboard_shortcuts.js"></script>
+
+    <!-- Floating Debug Console -->
+    <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>
+    <div class="debug-console" id="debugConsole">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <label style="margin:0; font-family:var(--mono); font-size:0.8125rem; color:var(--gray-800); font-weight:600;" data-i18n="consoleTitle">System Console & AI Output</label>
+            <div id="debug-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Live</div>
+        </div>
+        <pre id="globalDebug" class="debug-pre" style="flex:1;">Ready. Waiting for user interaction...</pre>
+    </div>
+
 </body>
 </html>

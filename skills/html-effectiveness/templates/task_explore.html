@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent - Create Task</title>
+    <title>Agent - Explore</title>
     <style>
         :root {
             --ivory: #FAF9F5;
@@ -403,18 +403,14 @@
         /* Layout and modal styles */
         .layout-grid { 
             width: 100%; 
-            align-items: start;
-            grid-template-columns: 75% 25%;
+            height: calc(100vh - 120px);
+            align-items: stretch;
+            grid-template-columns: 25% 1fr;
             transition: grid-template-columns 0.3s ease;
         }
         .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
-        .main-panel > .card { flex: 1; }
+        .main-panel > .card { flex: 1; overflow-y: auto; }
         .side-panel { 
-            position: sticky;
-            top: 2rem;
-            max-height: calc(100vh - 4rem);
-            display: flex;
-            flex-direction: column;
             min-height: 240px; 
             width:100%; 
             transition: all 0.3s ease;
@@ -433,17 +429,13 @@
         }
         
         .side-panel.collapsed .debug-pre,
-        .side-panel.collapsed #agentOutput,
-        .side-panel.collapsed textarea,
         .side-panel.collapsed label,
-        .side-panel.collapsed #debug-status,
-        .side-panel.collapsed #agent-status { 
+        .side-panel.collapsed #debug-status { 
             display:none; 
         }
         
         /* Collapsed button styling */
-        .side-panel.collapsed #btn-toggle-debug,
-        .side-panel.collapsed #btn-toggle-agent { 
+        .side-panel.collapsed #btn-toggle-debug { 
             padding:0 !important; 
             width:48px !important; 
             height:48px !important; 
@@ -456,9 +448,11 @@
         }
         
         /* Grid layout adjustments based on collapsed state */
-        .layout-grid.agent-collapsed {
-            grid-template-columns: 1fr 64px !important;
+        .layout-grid.debug-collapsed {
+            grid-template-columns: 64px 1fr !important;
         }
+        
+
         
         .modal-content { max-height: 90vh; overflow:auto; }
 
@@ -473,8 +467,8 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
-            <a href="/explore" id="nav-explore" class="nav-link" data-i18n="navExplore">0. Explore</a>
-            <a href="/create" id="nav-create" class="nav-link active" data-i18n="navCreate">1. Create</a>
+            <a href="/explore" id="nav-explore" class="nav-link active" data-i18n="navExplore">0. Explore</a>
+            <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
             <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
             <a href="/develop" id="nav-develop" class="nav-link" data-i18n="navDevelop">3. Develop</a>
             <a href="/testing" id="nav-testing" class="nav-link" data-i18n="navTesting">4. Test & Regression</a>
@@ -531,83 +525,60 @@
         </div>
     </div>
 
-    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; grid-template-columns: 1fr; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
         <!-- Main Card (left) -->
+
         <div class="main-panel">
-            <div class="card">
-                <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
-                <h1 data-i18n="titleCreate">Create a New Task</h1>
-                <div class="subtitle" data-i18n="subCreate">Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.</div>
-
-                <form id="createForm" onsubmit="handleCreate(event)">
-                    <div class="form-group">
-                        <label data-i18n="lblTitle">Task Title</label>
-                        <input type="text" id="title" data-i18n-ph="phTitle" placeholder="e.g. Implement CLI file-indexer" required>
+            <div class="card" style="display:flex; flex-direction:column; height:100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                    <div>
+                        <div class="eyebrow" data-i18n="eyebrowExplore">Task Exploration</div>
+                        <h1 style="margin:0;" data-i18n="titleAgentTerminal">Agent Terminal</h1>
                     </div>
-                    <div class="form-group">
-                        <label data-i18n="lblCategory">Category</label>
-                        <select id="category">
-                            <option value="Feature" data-i18n="optFeature">Feature</option>
-                            <option value="Bugfix" data-i18n="optBugfix">Bugfix</option>
-                            <option value="Refactor" data-i18n="optRefactor">Refactor</option>
-                            <option value="Research" data-i18n="optResearch">Research</option>
-                        </select>
+                    <div style="display:flex; gap:12px;">
+                        <button type="button" class="btn btn-secondary" onclick="openReferencesModal()" data-i18n="btnManageRef">Manage Context</button>
+                        <button type="button" class="btn btn-primary" onclick="window.location.href='/create'" data-i18n="btnProceed">Proceed to Create Task</button>
                     </div>
-                    <div class="form-group">
-                        <label data-i18n="lblGoal">Goal</label>
-                        <textarea id="goal" rows="4" data-i18n-ph="phGoal" placeholder="Describe the main objectives, target requirements, and high level architecture..." required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="lblContext">Background Context</label>
-                        <textarea id="context" rows="4" data-i18n-ph="phContext" placeholder="Provide background info, technical constraints, logs, or architectural context..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label data-i18n="lblReferences">Import Reference Documents & Code</label>
-                        <div class="reference-row">
-                            <select id="refType" class="reference-type">
-                                <option value="local" data-i18n="optLocal">Local Path</option>
-                                <option value="url" data-i18n="optUrl">URL</option>
-                            </select>
-                            <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com/...">
-                            <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
-                        </div>
-                        <div id="referencesList" class="ref-list"></div>
-                    </div>
-
-                    <div class="btn-row">
-                        <button type="button" class="btn btn-secondary" id="btn-copy-scoping" onclick="copyScopingMarkdown()" data-i18n="btnCopyScoping">Copy Scoping as Markdown</button>
-                        <button type="submit" class="btn btn-primary btn-full" id="btn-create" data-i18n="btnSubmit">Submit Task</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Agent Console (Right side panel) -->
-        <div class="side-panel agent-panel card" id="agentPanel" style="display:flex; flex-direction:column; padding:1.5rem; margin-bottom: 0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                <div>
-                    <div class="eyebrow" data-i18n="eyebrowAgent">AI Assistant</div>
-                    <h2 style="font-size:1.15rem; margin:0;" data-i18n="titleAgent">Agent Console</h2>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
-                        <div class="spinner"></div>
-                    </div>
-                    <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
-                    <button id="btn-toggle-agent" type="button" onclick="toggleAgentPanel()" style="background:none; border:none; cursor:pointer; color:var(--gray-500); font-size:1.2rem; padding:0;">&minus;</button>
-                </div>
-            </div>
-            
-            <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.875rem; margin-bottom:1rem;"></div>
-            
-            <div style="display:flex; flex-direction:column; gap:8px;">
-                <textarea id="agentInput" rows="3" placeholder="Message to agent..." style="width:100%; font-size:0.875rem; padding:0.5rem;"></textarea>
+                
+                <div id="terminalOutput" style="background:var(--slate); color:var(--olive); font-family:var(--mono); flex:1; overflow-y:auto; padding:1rem; border-radius:6px; margin-bottom:1rem; white-space:pre-wrap; font-size: 0.9rem;">Ready. Ask me anything about the codebase...</div>
+                
                 <div style="display:flex; gap:8px;">
-                    <button class="btn btn-primary btn-full" style="padding:0.5rem; font-size:0.875rem;" onclick="sendAgentMessage()">Send</button>
-                    <button class="btn btn-secondary" style="padding:0.5rem; font-size:0.875rem;" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                    <textarea id="terminalInput" rows="2" style="flex:1; font-family:var(--mono);" placeholder="Ask the agent to explore..."></textarea>
+                    <button id="btn-send" class="btn btn-primary" onclick="sendTerminalMessage()">Send</button>
                 </div>
             </div>
         </div>
+
+    </div>
+
+    <!-- References Modal -->
+    <div id="referencesModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowContext">Context</div>
+                    <h2 style="margin:0;" data-i18n="titleReferences">Reference Documents & Code</h2>
+                </div>
+                <button type="button" onclick="closeReferencesModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <div class="reference-row">
+                    <select id="refType" class="reference-type">
+                        <option value="local" data-i18n="optLocal">Local Path</option>
+                        <option value="url" data-i18n="optUrl">URL</option>
+                    </select>
+                    <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com...">
+                    <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
+                </div>
+                <div id="referencesList" class="ref-list" style="margin-top: 1rem;"></div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+                <button type="button" class="btn btn-primary" onclick="closeReferencesModal()">Done</button>
+            </div>
+        </div>
+    </div>
+
     </div>
 
     <script>
@@ -619,7 +590,12 @@
                 navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 modelLoading: 'Loading models...',
-                eyebrowInit: 'Task Initiation',
+                eyebrowExplore: 'Task Exploration',
+                titleAgentTerminal: 'Agent Terminal',
+                btnManageRef: 'Manage Context',
+                btnProceed: 'Proceed to Create Task',
+                eyebrowContext: 'Context',
+                titleReferences: 'Reference Documents & Code',
                 titleCreate: 'Create a New Task',
                 subCreate: 'Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.',
                 lblTitle: 'Task Title',
@@ -652,7 +628,12 @@
                 navDevelop: '3. 原型',
                 navTesting: '4. 測試與回歸',
                 modelLoading: '載入模型中...',
-                eyebrowInit: '任務啟動',
+                eyebrowExplore: '任務探索',
+                titleAgentTerminal: 'Agent 終端機',
+                btnManageRef: '管理上下文',
+                btnProceed: '繼續建立任務',
+                eyebrowContext: '上下文',
+                titleReferences: '參考文件與程式碼',
                 titleCreate: '建立新任務',
                 subCreate: '定義、組織並提交您的新程式開發任務。Agent 會在「規格」分頁中設計專屬規格。',
                 lblTitle: '任務標題',
@@ -752,8 +733,9 @@
             }
         }
 
-        async function fetchDebugLogs() { /* replaced by ocLogDebug */ }
-        function logDebug(message) { ocLogDebug(message); }
+        function logDebug(message) {
+            ocLogDebug(message);
+        }
 
         function setLoading(isLoading, btnId) {
             const indicator = document.getElementById('loading-indicator');
@@ -773,13 +755,7 @@
                 const stateRes = await fetch('/api/state');
                 const stateData = await stateRes.json();
                 if (stateData.status === 'success') {
-                    if (stateData.state.create_data) {
-                        const c = stateData.state.create_data;
-                        if (c.title) document.getElementById('title').value = c.title;
-                        if (c.category) document.getElementById('category').value = c.category;
-                        if (c.goal) document.getElementById('goal').value = c.goal;
-                        if (c.context) document.getElementById('context').value = c.context;
-                    }
+
                     if (stateData.state.references) {
                         activeReferences = stateData.state.references;
                     }
@@ -791,6 +767,10 @@
 
             await loadAgentConfig();
             await refreshModelSelect();
+            
+            setTimeout(() => {
+                document.querySelectorAll('textarea').forEach(autoResizeTextarea);
+            }, 50);
         });
 
         function setAgentConfigFeedback(message, isError = false) {
@@ -801,15 +781,20 @@
         }
 
         async function refreshModelSelect() {
+            // Model selection is managed natively by the OpenCode session.
             const select = document.getElementById('globalModelSelect');
             if (select) select.style.display = 'none';
         }
 
         async function loadAgentConfig() {
+            // Config is managed by the OpenCode server; no API keys needed here.
             const backendStatus = document.getElementById('backendStatus');
             if (backendStatus) backendStatus.textContent = 'OpenCode server at 127.0.0.1:4096';
         }
-        async function saveAgentConfig() { closeAgentConfigModal(); }
+
+        async function saveAgentConfig() {
+            closeAgentConfigModal();
+        }
 
         // Modal open/close for agent configuration
         function openAgentConfigModal() {
@@ -824,234 +809,67 @@
             if (modal) modal.style.display = 'none';
         }
 
+        function openReferencesModal() {
+            const modal = document.getElementById('referencesModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                renderReferences();
+            }
+        }
+        
+        function closeReferencesModal() {
+            const modal = document.getElementById('referencesModal');
+            if (modal) modal.style.display = 'none';
+        }
+
         // Update grid layout based on collapsed state
         function updateGridLayout(){
             const debugCollapsed = document.getElementById('debugPanel')?.classList.contains('collapsed');
-            const agentCollapsed = document.getElementById('agentPanel')?.classList.contains('collapsed');
             const grid = document.querySelector('.layout-grid');
             if(!grid) return;
-            grid.classList.remove('debug-collapsed', 'agent-collapsed', 'both-collapsed');
-            if(debugCollapsed && agentCollapsed) grid.classList.add('both-collapsed');
-            else if(debugCollapsed) grid.classList.add('debug-collapsed');
-            else if(agentCollapsed) grid.classList.add('agent-collapsed');
+            grid.classList.remove('debug-collapsed');
+            if(debugCollapsed) grid.classList.add('debug-collapsed');
         }
 
         // Toggle side panels
                 function toggleDebugConsole() {
-            const c = document.getElementById('debugConsole');
-            if (c) c.classList.toggle('open');
-        }
-        function toggleAgentPanel(){
-            const panel = document.getElementById('agentPanel');
-            const btn = document.getElementById('btn-toggle-agent');
-            if(!panel) return;
-            panel.classList.toggle('collapsed');
-            if(btn) btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
-            updateGridLayout();
+            const console = document.getElementById('debugConsole');
+            console.classList.toggle('open');
         }
 
-        async function sendAgentMessage(){
-            const input = document.getElementById('agentInput');
-            const out = document.getElementById('agentOutput');
+        async function sendTerminalMessage(){
+            const input = document.getElementById('terminalInput');
+            const out = document.getElementById('terminalOutput');
             if(!input || !out) return;
             const msg = input.value.trim();
             if(!msg) return;
-            appendAgentOutput('> ' + msg);
+            out.textContent += '\n\n> User:\n' + msg;
             input.value = '';
+            out.scrollTop = out.scrollHeight;
             try {
-                setLoading(true, null);
+                setLoading(true, 'btn-send');
                 const sessionId = await ocGetOrCreateSessionId();
                 const lang = localStorage.getItem('app_lang') || 'en';
-                const prompt = ocBuildChatPrompt(msg, lang);
+                const prompt = ocBuildExplorePrompt(msg, activeReferences, lang);
                 await ocSendPrompt(sessionId, prompt);
-                const result = await ocPollForCompletion(sessionId, 'chat', null);
-                appendAgentOutput(result?.chat || JSON.stringify(result, null, 2));
+                logDebug('Sent explore prompt. Waiting for agent response...');
+                const result = await ocPollForCompletion(sessionId, 'task_explore', (chunk) => {
+                    const pre = document.getElementById('globalDebug');
+                    if (pre) pre.textContent = chunk.slice(0, 2000);
+                });
+                const insights = result?.explore?.insights || [];
+                const displayText = insights.length
+                    ? insights.map((ins, i) => `${i+1}. ${ins}`).join('\n\n')
+                    : JSON.stringify(result, null, 2);
+                out.textContent += '\n\n> Agent:\n' + displayText;
+                logDebug('Explore complete.');
             } catch(e){
-                appendAgentOutput('ERROR: '+e.message);
-            } finally { setLoading(false, null); }
-        }
-        function parseMarkdown(text) {
-            if (!text) return "";
-            
-            // 1. Escape HTML to prevent broken formatting with C++ templates like <int>
-            let html = text
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;");
-            
-            // 2. Handle block code blocks before other replacements
-            const codeBlocks = [];
-            html = html.replace(/```(?:[a-zA-Z0-9+#-]+)?\n([\s\S]*?)\n```/g, function(match, code) {
-                codeBlocks.push(code);
-                return `__CODE_BLOCK_PLACEHOLDER_${codeBlocks.length - 1}__`;
-            });
-            
-            // 3. Inline code
-            html = html.replace(/`(.*?)`/g, "<code>$1</code>");
-            
-            // 4. Bold and Italic
-            html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
-            html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
-            
-            // 5. Headings
-            html = html.replace(/^#### (.*?)$/gm, "<h4>$1</h4>");
-            html = html.replace(/^### (.*?)$/gm, "<h3>$1</h3>");
-            html = html.replace(/^## (.*?)$/gm, "<h2>$1</h2>");
-            html = html.replace(/^# (.*?)$/gm, "<h1>$1</h1>");
-            
-            // 6. Horizontal rule
-            html = html.replace(/^---$/gm, "<hr>");
-            
-            // 7. Parse line by line for paragraphs and lists
-            const lines = html.split('\n');
-            let inList = false;
-            let listType = null;
-            let parsedLines = [];
-            
-            for (let line of lines) {
-                let trimmed = line.trim();
-                
-                // Unordered list item
-                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                    if (!inList || listType !== 'ul') {
-                        if (inList) parsedLines.push(`</${listType}>`);
-                        parsedLines.push('<ul>');
-                        inList = true;
-                        listType = 'ul';
-                    }
-                    parsedLines.push(`<li>${trimmed.substring(2)}</li>`);
-                } 
-                // Ordered list item
-                else if (/^\d+\.\s/.test(trimmed)) {
-                    let match = trimmed.match(/^(\d+)\.\s(.*)/);
-                    if (!inList || listType !== 'ol') {
-                        if (inList) parsedLines.push(`</${listType}>`);
-                        parsedLines.push('<ol>');
-                        inList = true;
-                        listType = 'ol';
-                    }
-                    parsedLines.push(`<li>${match[2]}</li>`);
-                } 
-                // Non-list line
-                else {
-                    if (inList) {
-                        parsedLines.push(`</${listType}>`);
-                        inList = false;
-                        listType = null;
-                    }
-                    
-                    if (trimmed !== '') {
-                        if (trimmed.startsWith('<h') || trimmed.startsWith('<hr') || trimmed.startsWith('__CODE_BLOCK_PLACEHOLDER_')) {
-                            parsedLines.push(line);
-                        } else {
-                            parsedLines.push(`<p>${line}</p>`);
-                        }
-                    } else {
-                        parsedLines.push('');
-                    }
-                }
+                out.textContent += '\n\nERROR: '+e.message;
+                logDebug('Error: ' + e.message);
+            } finally { 
+                setLoading(false, 'btn-send'); 
+                out.scrollTop = out.scrollHeight;
             }
-            if (inList) {
-                parsedLines.push(`</${listType}>`);
-            }
-            
-            html = parsedLines.join('\n');
-            
-            // 8. Re-inject code blocks
-            for (let i = 0; i < codeBlocks.length; i++) {
-                html = html.replace(`__CODE_BLOCK_PLACEHOLDER_${i}__`, `<pre><code>${codeBlocks[i]}</code></pre>`);
-            }
-            
-            return html;
-        }
-
-        function appendAgentOutput(text){
-            const out = document.getElementById('agentOutput');
-            if(!out) return;
-            
-            // Set sans-serif font for agentOutput container so it's readable
-            out.style.fontFamily = "var(--sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-            out.style.fontSize = "0.875rem";
-            out.style.lineHeight = "1.5";
-            
-            const div = document.createElement('div');
-            div.style.marginBottom = "1.5rem";
-            div.style.borderBottom = "1px solid var(--gray-200)";
-            div.style.paddingBottom = "1rem";
-            
-            div.innerHTML = parseMarkdown(text);
-            
-            // Fine-tune styles of rendered children for aesthetics
-            const paragraphs = div.getElementsByTagName('p');
-            for (let p of paragraphs) {
-                p.style.marginBottom = "0.75rem";
-                p.style.lineHeight = "1.6";
-            }
-            const headings = div.querySelectorAll('h1, h2, h3, h4, h5, h6');
-            for (let h of headings) {
-                h.style.marginTop = "1rem";
-                h.style.marginBottom = "0.5rem";
-                h.style.color = "var(--slate)";
-                h.style.fontWeight = "600";
-            }
-            const lists = div.querySelectorAll('ul, ol');
-            for (let l of lists) {
-                l.style.marginLeft = "1.25rem";
-                l.style.marginBottom = "0.75rem";
-            }
-            const listItems = div.getElementsByTagName('li');
-            for (let li of listItems) {
-                li.style.marginBottom = "0.25rem";
-            }
-            const inlineCode = div.getElementsByTagName('code');
-            for (let c of inlineCode) {
-                c.style.fontFamily = "var(--mono)";
-                c.style.background = "var(--gray-200)";
-                c.style.padding = "0.1rem 0.3rem";
-                c.style.borderRadius = "4px";
-                c.style.fontSize = "0.8125rem";
-            }
-            const preBlocks = div.getElementsByTagName('pre');
-            for (let pb of preBlocks) {
-                pb.style.background = "var(--slate)";
-                pb.style.color = "var(--ivory)";
-                pb.style.padding = "0.75rem";
-                pb.style.borderRadius = "6px";
-                pb.style.overflowX = "auto";
-                pb.style.marginBottom = "0.75rem";
-                const preCode = pb.getElementsByTagName('code');
-                for (let pc of preCode) {
-                    pc.style.background = "transparent";
-                    pc.style.padding = "0";
-                }
-            }
-            const hrTags = div.getElementsByTagName('hr');
-            for (let hr of hrTags) {
-                hr.style.border = "none";
-                hr.style.borderTop = "1px solid var(--gray-200)";
-                hr.style.margin = "1rem 0";
-            }
-            const tables = div.getElementsByTagName('table');
-            for (let t of tables) {
-                t.style.width = "100%";
-                t.style.borderCollapse = "collapse";
-                t.style.marginBottom = "0.75rem";
-                t.style.fontSize = "0.8125rem";
-                const ths = t.getElementsByTagName('th');
-                for (let th of ths) {
-                    th.style.border = "1px solid var(--gray-200)";
-                    th.style.padding = "0.4rem";
-                    th.style.background = "var(--gray-50)";
-                    th.style.fontWeight = "600";
-                }
-                const tds = t.getElementsByTagName('td');
-                for (let td of tds) {
-                    td.style.border = "1px solid var(--gray-200)";
-                    td.style.padding = "0.4rem";
-                }
-            }
-            out.appendChild(div);
-            out.scrollTop = out.scrollHeight;
         }
 
         // No polling needed; debug logs are written directly via ocLogDebug.
@@ -1067,81 +885,7 @@
             }
         });
 
-        async function handleCreate(event) {
-            event.preventDefault();
-            const btnId = 'btn-create';
-            const lang = localStorage.getItem('app_lang') || 'en';
-            const title    = document.getElementById('title').value;
-            const category = document.getElementById('category').value;
-            const goal     = document.getElementById('goal').value;
-            const context  = document.getElementById('context').value;
 
-            setLoading(true, btnId);
-            logDebug(`Sending 'task-create' request via OpenCode...`);
-
-            try {
-                const sessionId = await ocGetOrCreateSessionId();
-                const prompt = ocBuildCreatePrompt(title, category, goal, context, activeReferences, lang);
-                await ocSendPrompt(sessionId, prompt);
-
-                // Persist raw form data to workflow state
-                await ocSaveState({ create_data: { title, category, goal, context }, references: activeReferences });
-
-                logDebug('Prompt sent. Waiting for agent response...');
-                const result = await ocPollForCompletion(sessionId, 'task_create', null);
-
-                if (result?.spec) {
-                    await ocSaveState({ spec_data: result.spec });
-                    logDebug('Spec generated. Redirecting to Spec tab...');
-                    setTimeout(() => { window.location.href = '/spec'; }, 800);
-                } else {
-                    logDebug('Unexpected response: ' + JSON.stringify(result).slice(0, 200));
-                }
-            } catch (err) {
-                logDebug('ERROR (task-create): ' + err.message);
-            } finally {
-                setLoading(false, btnId);
-            }
-        }
-
-        function copyScopingMarkdown() {
-            const title = document.getElementById('title').value || 'Untitled Task';
-            const category = document.getElementById('category').value;
-            const goal = document.getElementById('goal').value || 'No goal provided.';
-            const context = document.getElementById('context').value || 'No context provided.';
-            
-            let markdown = `# Task Scoping: ${title}\n\n- **Category:** ${category}\n\n## Goal\n${goal}\n\n## Background Context\n${context}`;
-            
-            if (activeReferences.length > 0) {
-                markdown += "\n\n## Reference Materials\n";
-                activeReferences.forEach(ref => {
-                    markdown += `- [${ref.type.toUpperCase()}] ${ref.value}\n`;
-                });
-            }
-
-            const btn = document.getElementById('btn-copy-scoping');
-            function flash() {
-                const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                btn.textContent = dict['copied'] || 'Copied';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = dict['btnCopyScoping'] || 'Copy Scoping as Markdown';
-                    btn.classList.remove('copied');
-                }, 1200);
-            }
-
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(markdown).then(flash, flash);
-            } else {
-                const ta = document.createElement('textarea');
-                ta.value = markdown;
-                document.body.appendChild(ta);
-                ta.select();
-                try { document.execCommand('copy'); } catch (e) {}
-                document.body.removeChild(ta);
-                flash();
-            }
-        }
     </script>
     <script src="/opencode_client.js"></script>
     <script src="/sessions.js"></script>

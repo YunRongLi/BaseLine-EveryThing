@@ -67,6 +67,13 @@ Apply this skill whenever the user requests or the task naturally fits one of th
 4. The script will output the port it chose (e.g., `Server started at http://localhost:43218`). Provide the user with the localhost URL (e.g., `http://localhost:<port>/filename.html`) so they can access it via their browser. Do not output the entire HTML code in your chat response.
 
 ## 5. Special Commands
+### `/task-explore`
+When the user explicitly issues the `/task-explore` command:
+1. Generate an interactive HTML interface tailored for exploring the user's codebase, data, or current problem space.
+2. The main grid MUST provide a terminal interface allowing the user to communicate back and forth with the Agent.
+3. The page MUST provide a dialog box (modal) that allows the user to add/import reference documents or code (files or directories).
+4. Start the local HTML server and provide the user with the localhost URL so they can access it in their browser.
+
 ### `/task-create`
 When the user explicitly issues the `/task-create` command:
 1. Generate an interactive HTML discussion interface tailored for scoping the new task.
@@ -80,12 +87,12 @@ When the user explicitly issues the `/task-spec` command:
 3. Enable interactive fields or forms where the specification can be refined, edited, or expanded directly in the browser.
 4. **Mandatory Text Dialogue**: You MUST include a large multi-line text input box (`<textarea id="scopingInput">`) so the user can easily submit additional scoped instructions or custom scoping requirements to the `/api/agent` backend with the `task-spec` command.
 
-### `/task-prototype`
-When the user explicitly issues the `/task-prototype` command:
-1. Construct an interactive prototype or visual representation of the proposed solution based on the defined spec.
+### `/task-develop`
+When the user explicitly issues the `/task-develop` command:
+1. Construct an interactive develop or visual representation of the proposed solution based on the defined spec.
 2. Implement mock workflows, interactive wireframes, layouts, or simulated logic so the user can visualize and interact with the main features.
-3. Keep the prototype highly interactive to encourage hands-on exploration.
-4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="prototypeFeedback">`) for final implementation/verification feedback. When the user clicks the "Finalize & Execute" button, it sends the input to the `/api/agent` backend under the `task-prototype` command, which directly implements the verified, functional solution in the user's workspace, running tests and updating the prototype tab to display a beautiful completion dashboard.
+3. Keep the develop highly interactive to encourage hands-on exploration.
+4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="developFeedback">`) for final implementation/verification feedback. When the user clicks the "Finalize & Execute" button, it sends the input to the `/api/agent` backend under the `task-develop` command, which directly implements the verified, functional solution in the user's workspace, running tests and updating the develop tab to display a beautiful completion dashboard.
 
 ## 6. Workspace Context Retrieval Tool
 
