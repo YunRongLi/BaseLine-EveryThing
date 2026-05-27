@@ -54,7 +54,28 @@ async def call_agent_async(command, data):
     if ref_context:
         prompt += f"========================================= \nIMPORT REFERENCE MATERIALS & ARCHITECTURAL CONTEXT:\n{ref_context}\n=========================================\n\n"
 
-    if command == "task-create":
+    if command == "compress-history":
+        history_str = json.dumps(data.get("chat_history", []), indent=2, ensure_ascii=False)
+        prompt += f"""You are a helpful senior system architect. Analyze the following conversation history and compress it into a dense, high-fidelity engineering summary. Retain key structural decisions, requirements, code paths, and constraints. Do NOT use any Markdown symbols or emojis. Write a single cohesive paragraph.
+        
+        Conversation History:
+        {history_str}
+        
+        Summary:"""
+    elif command == "task-explore":
+        prompt += f"""Analyze the user's context and generate an exploration strategy.
+Context: {data.get('context', '')}
+
+You MUST respond ONLY with a JSON block matching this exact schema:
+```json
+{{
+  "explore": {{
+    "insights": ["Insight 1", "Insight 2"]
+  }}
+}}
+```
+"""
+    elif command == "task-create":
         prompt += f"""Analyze this task and generate the specifications.
 Task Title: {data.get('title')}
 Category: {data.get('category')}
@@ -127,19 +148,19 @@ You MUST respond ONLY with a JSON block in this schema:
 ```
 """
         else:
-            prompt += f"""The user has finalized the task specifications and wants to generate the prototype and architectural design.
+            prompt += f"""The user has finalized the task specifications and wants to generate the develop and architectural design.
 Final Specification Sections:
 {sections_str}
 
 User's Scoping Feedback/Instructions:
 {scoping_input}
 
-Analyze these specifications and design the Prototype architecture, workflow steps, file tree list, and core logic snippets.
+Analyze these specifications and design the Develop architecture, workflow steps, file tree list, and core logic snippets.
 CRITICAL RULE FOR QUESTIONS: Limit the "open_questions" list strictly to at most three (3) of the most important architectural questions that must need the user to decide. Otherwise, you should research contents provided by the user, like local files or codes. Do not ask more than three.
 You MUST respond ONLY with a JSON block in this schema:
 ```json
 {{
-  "prototype": {{
+  "develop": {{
     "workflow_steps": [
       "Step 1: Description of step (clean text)",
       "Step 2: Description of step"
@@ -163,7 +184,7 @@ You MUST respond ONLY with a JSON block in this schema:
 }}
 ```
 """
-    elif command == "task-prototype":
+    elif command == "task-develop":
         is_update = data.get('is_update', False)
         workflow_steps = data.get('workflow_steps', [])
         file_tree = data.get('file_tree', [])
@@ -175,7 +196,7 @@ You MUST respond ONLY with a JSON block in this schema:
         snippets_str = json.dumps(code_snippets, indent=2, ensure_ascii=False)
         
         if is_update:
-            prompt += f"""The user wants to UPDATE the prototype design and code based on their feedback.
+            prompt += f"""The user wants to UPDATE the develop design and code based on their feedback.
 Current Workflow Steps:
 {workflow_str}
 
@@ -188,13 +209,13 @@ Current Code Snippets:
 User's Feedback/Instructions:
 {feedback_input}
 
-Analyze the feedback and output the updated prototype.
+Analyze the feedback and output the updated develop.
 CRITICAL RULE FOR QUESTIONS: Limit the "open_questions" list strictly to at most three (3) of the most important remaining questions that must need the user to decide. Otherwise, you should research contents provided by the user, like local files or codes. Do not ask more than three.
 CRITICAL RULE: Group related details into cohesive paragraph strings. Let the AI determine the optimal semantic grouping. Do NOT blindly split every single sentence or newline into a separate item.
 You MUST respond ONLY with a JSON block in this schema:
 ```json
 {{
-  "prototype": {{
+  "develop": {{
     "workflow_steps": ["Step 1: cohesive paragraph...", "Step 2: cohesive paragraph..."],
     "file_tree": [
       {{ "path": "...", "status": "..." }}
@@ -259,7 +280,7 @@ You MUST respond ONLY with a JSON block in this schema:
         file_tree_str = json.dumps(file_tree, indent=2, ensure_ascii=False)
         snippets_str = json.dumps(code_snippets, indent=2, ensure_ascii=False)
         
-        prompt += f"""The user's code is undergoing validation and regression verification. Your task is to analyze the runtime environments, prototype designs, and command execution outputs to determine if the implemented code conforms to the target design, identify any discrepancies or bugs, and apply fixes.
+        prompt += f"""The user's code is undergoing validation and regression verification. Your task is to analyze the runtime environments, develop designs, and command execution outputs to determine if the implemented code conforms to the target design, identify any discrepancies or bugs, and apply fixes.
 
 =========================================
 ACTIVE ENVIRONMENT VARIABLES / 環境變數設定:
@@ -282,7 +303,7 @@ USER RECOVERY & TRIAGE REMEDIATION INSTRUCTIONS / 使用者反饋與修復指示
 =========================================
 
 =========================================
-ORIGINAL SOLUTION FILES & PROTOTYPE DESIGNS / 解決方案原型結構:
+ORIGINAL SOLUTION FILES & DEVELOP DESIGNS / 解決方案原型結構:
 {file_tree_str}
 =========================================
 

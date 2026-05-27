@@ -10,7 +10,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(path)
         clean_path = parsed.path.lstrip('/')
         
-        if clean_path in ["task_create.html", "task_spec.html", "task_prototype.html", "task_testing.html", "recursive_search.html"]:
+        if clean_path in ["task_explore.html", "task_create.html", "task_spec.html", "task_develop.html", "task_testing.html", "task_workflow.html", "recursive_search.html", "sessions.js"]:
             local_path = os.path.abspath(clean_path)
             if os.path.exists(local_path):
                 return local_path
@@ -20,12 +20,74 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
             
         return super().translate_path(path)
 
+    def log_message(self, format, *args):
+        # Ignore polling requests for api/debug to prevent log spamming loop
+        if len(args) > 0 and isinstance(args[0], str) and "api/debug" in args[0]:
+            return
+        
+        # Write standard HTTP logs to stdout instead of stderr to prevent [ERROR] prefixes in UI
+        sys.stdout.write("%s - - [%s] %s\n" %
+                         (self.address_string(),
+                          self.log_date_time_string(),
+                          format % args))
+
+
+
+    def load_session_to_workflow_state(self, session_id=None):
+        import session_manager
+        from state import WORKFLOW_STATE
+        if not session_id:
+            if "?" in self.path:
+                from urllib.parse import parse_qs, urlparse
+                query = parse_qs(urlparse(self.path).query)
+                session_id = query.get('session_id', [None])[0]
+        if not session_id:
+            session_id = session_manager.get_active_session_id()
+        
+        session_data = session_manager.load_session(session_id)
+        
+        # Clear and update WORKFLOW_STATE in place to keep the same dict object
+        WORKFLOW_STATE.clear()
+        WORKFLOW_STATE.update(session_data["state"])
+        
+        self.current_session_id = session_id
+        self.current_session_data = session_data
+
+    def save_workflow_state_to_session(self):
+        if hasattr(self, 'current_session_id') and hasattr(self, 'current_session_data'):
+            import session_manager
+            from state import WORKFLOW_STATE
+            self.current_session_data["state"] = dict(WORKFLOW_STATE)
+            self.current_session_data["current_stage"] = WORKFLOW_STATE.get("current_stage", "explore")
+            session_manager.save_session(self.current_session_id, self.current_session_data)
+
     def do_GET(self):
+        self.load_session_to_workflow_state()
+        try:
+            self._handle_do_GET()
+        finally:
+            self.save_workflow_state_to_session()
+
+    def _handle_do_GET(self):
         global WORKFLOW_STATE
         clean_path = urllib.parse.urlparse(self.path).path.lstrip('/')
         
-        if clean_path == "reset":
-            WORKFLOW_STATE = {
+        if clean_path == "api/sessions":
+            import session_manager
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                'status': 'success',
+                'sessions': session_manager.list_sessions(),
+                'active_session_id': session_manager.get_active_session_id()
+            }).encode('utf-8'))
+            return
+            
+        elif clean_path == "reset":
+            WORKFLOW_STATE.clear()
+            WORKFLOW_STATE.update({
                 "current_stage": "create",
                 "create_data": {
                     "title": "",
@@ -37,7 +99,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "sections": [],
                     "open_questions": []
                 },
-                "prototype_data": {
+                "develop_data": {
                     "workflow_steps": [],
                     "file_tree": [],
                     "code_snippets": [],
@@ -56,7 +118,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "verification_results": []
                 },
                 "references": []
-            }
+            })
             self.send_response(302)
             self.send_header('Location', '/create')
             self.end_headers()
@@ -70,14 +132,18 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({'status': 'success', 'logs': WORKFLOW_STATE.get("debug_logs", "")}).encode('utf-8'))
             return
             
-        elif clean_path in ["", "index.html", "create"]:
+        elif clean_path in ["", "index.html", "explore", "task-explore", "task_explore"]:
+            self.path = "/task_explore.html"
+        elif clean_path in ["create", "task-create", "task_create"]:
             self.path = "/task_create.html"
-        elif clean_path == "spec":
+        elif clean_path in ["spec", "task-spec", "task_spec"]:
             self.path = "/task_spec.html"
-        elif clean_path == "prototype":
-            self.path = "/task_prototype.html"
-        elif clean_path == "testing":
+        elif clean_path in ["develop", "develop", "task-develop", "task_develop"]:
+            self.path = "/task_develop.html"
+        elif clean_path in ["testing", "task-testing", "task_testing"]:
             self.path = "/task_testing.html"
+        elif clean_path in ["workflow", "task-workflow", "task_workflow"]:
+            self.path = "/task_workflow.html"
             
         if clean_path == 'api/models':
             has_gemini = check_api_key_gemini()
@@ -155,9 +221,111 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        import io, json
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length) if content_length > 0 else b''
+        self.rfile = io.BytesIO(body)
+        
+        session_id = self.headers.get('Session-Id') or self.headers.get('x-session-id')
+        if not session_id:
+            try:
+                payload = json.loads(body.decode('utf-8'))
+                session_id = payload.get('session_id') or payload.get('data', {}).get('session_id')
+            except Exception:
+                pass
+                
+        self.load_session_to_workflow_state(session_id)
+        try:
+            self._handle_do_POST()
+        finally:
+            self.save_workflow_state_to_session()
+
+    def _handle_do_POST(self):
         global WORKFLOW_STATE
+        import session_manager
+        
+        if self.path == '/api/sessions/create':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            title = None
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                title = payload.get('title')
+            except Exception:
+                pass
+            new_sess = session_manager.create_session(title)
+            session_manager.set_active_session_id(new_sess["session_id"])
+            
+            # Immediately update the memory copy so the finally block saves it correctly
+            self.current_session_id = new_sess["session_id"]
+            self.current_session_data = new_sess
+            WORKFLOW_STATE.clear()
+            WORKFLOW_STATE.update(new_sess["state"])
+            
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'success', 'session': new_sess}).encode('utf-8'))
+            return
+            
+        elif self.path == '/api/sessions/select':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            session_id = None
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                session_id = payload.get('session_id')
+            except Exception:
+                pass
+            if session_id:
+                session_manager.set_active_session_id(session_id)
+                sess = session_manager.load_session(session_id)
+                self.current_session_id = session_id
+                self.current_session_data = sess
+                WORKFLOW_STATE.clear()
+                WORKFLOW_STATE.update(sess["state"])
+                
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success', 'session_id': session_id}).encode('utf-8'))
+            else:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing session_id'}).encode('utf-8'))
+            return
+            
+        elif self.path == '/api/sessions/delete':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            session_id = None
+            try:
+                payload = json.loads(post_data.decode('utf-8'))
+                session_id = payload.get('session_id')
+            except Exception:
+                pass
+            if session_id:
+                session_manager.delete_session(session_id)
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'success'}).encode('utf-8'))
+            else:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'error', 'message': 'Missing session_id'}).encode('utf-8'))
+            return
+
         if self.path == '/api/state/reset':
-            WORKFLOW_STATE = {
+            WORKFLOW_STATE.clear()
+            WORKFLOW_STATE.update({
                 "current_stage": "create",
                 "create_data": {
                     "title": "",
@@ -169,7 +337,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "sections": [],
                     "open_questions": []
                 },
-                "prototype_data": {
+                "develop_data": {
                     "workflow_steps": [],
                     "file_tree": [],
                     "code_snippets": [],
@@ -188,7 +356,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     "verification_results": []
                 },
                 "references": []
-            }
+            })
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -255,7 +423,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     if not test_steps:
                         # Guess default test command based on workspace file structures
                         default_cmd = "pytest"
-                        for snippet in WORKFLOW_STATE["prototype_data"].get("code_snippets", []):
+                        for snippet in WORKFLOW_STATE["develop_data"].get("code_snippets", []):
                             filename = snippet.get("filename", "")
                             if filename.endswith(".js") or filename.endswith(".ts"):
                                 default_cmd = "npm test"
@@ -346,7 +514,10 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                 try:
                     parsed_response = json.loads(json_str)
                     
-                    if command == "task-create":
+                    if command == "task-explore":
+                        WORKFLOW_STATE["current_stage"] = "create"
+                        
+                    elif command == "task-create":
                         WORKFLOW_STATE["create_data"] = {
                             "title": data.get("title", ""),
                             "category": data.get("category", "Feature"),
@@ -369,20 +540,20 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                                 "open_questions": spec_info.get("open_questions", [])
                             }
                         else:
-                            proto_info = parsed_response.get("prototype", {})
-                            WORKFLOW_STATE["prototype_data"] = {
+                            proto_info = parsed_response.get("develop", {})
+                            WORKFLOW_STATE["develop_data"] = {
                                 "workflow_steps": proto_info.get("workflow_steps", []),
                                 "file_tree": proto_info.get("file_tree", []),
                                 "code_snippets": proto_info.get("code_snippets", []),
                                 "open_questions": proto_info.get("open_questions", [])
                             }
-                            WORKFLOW_STATE["current_stage"] = "prototype"
+                            WORKFLOW_STATE["current_stage"] = "develop"
                             
-                    elif command == "task-prototype":
+                    elif command == "task-develop":
                         is_update = data.get("is_update", False)
                         if is_update:
-                            proto_info = parsed_response.get("prototype", {})
-                            WORKFLOW_STATE["prototype_data"] = {
+                            proto_info = parsed_response.get("develop", {})
+                            WORKFLOW_STATE["develop_data"] = {
                                 "workflow_steps": proto_info.get("workflow_steps", []),
                                 "file_tree": proto_info.get("file_tree", []),
                                 "code_snippets": proto_info.get("code_snippets", []),
@@ -414,7 +585,7 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                             
                             # Write approved files into workspace
                             try:
-                                code_snippets = WORKFLOW_STATE["prototype_data"].get("code_snippets", [])
+                                code_snippets = WORKFLOW_STATE["develop_data"].get("code_snippets", [])
                                 workspace_path = data.get("workspace_path", ".")
                                 base_workspace = os.path.abspath(workspace_path)
                                 for snippet in code_snippets:
@@ -456,16 +627,16 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                                         print(f"System (Regression Fix): Automatically wrote {filename} to {base_workspace}")
                                         applied_snippets.append(snippet)
                                         
-                            # Proactively update prototype snippet memory with correct code as well
+                            # Proactively update develop snippet memory with correct code as well
                             if applied_snippets:
-                                if "code_snippets" not in WORKFLOW_STATE["prototype_data"]:
-                                    WORKFLOW_STATE["prototype_data"]["code_snippets"] = []
+                                if "code_snippets" not in WORKFLOW_STATE["develop_data"]:
+                                    WORKFLOW_STATE["develop_data"]["code_snippets"] = []
                                 for app_sn in applied_snippets:
-                                    existing = next((s for s in WORKFLOW_STATE["prototype_data"]["code_snippets"] if s["filename"] == app_sn["filename"]), None)
+                                    existing = next((s for s in WORKFLOW_STATE["develop_data"]["code_snippets"] if s["filename"] == app_sn["filename"]), None)
                                     if existing:
                                         existing["code"] = app_sn["code"]
                                     else:
-                                        WORKFLOW_STATE["prototype_data"]["code_snippets"].append(app_sn)
+                                        WORKFLOW_STATE["develop_data"]["code_snippets"].append(app_sn)
                         except Exception as exec_err:
                             print(f"Error executing regression workspace changes: {exec_err}")
                             
@@ -529,6 +700,47 @@ class AgentHTTPRequestHandler(SimpleHTTPRequestHandler):
                     print(f"Error parsing agent JSON response: {parse_err}")
                     sys.stdout.flush()
                     response_text_clean += f"\n\n[System Error: Failed to parse Agent response as JSON. Error: {str(parse_err)}]"
+                
+                # Append to chat history
+                user_msg = data.get("context") or data.get("scoping_input") or data.get("feedback_input") or f"Command: {command}"
+                if user_msg and hasattr(self, 'current_session_data'):
+                    import time
+                    self.current_session_data.setdefault("chat_history", []).append({
+                        "role": "user",
+                        "content": user_msg,
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    self.current_session_data.setdefault("chat_history", []).append({
+                        "role": "assistant",
+                        "content": response_text_clean,
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    
+                    # Check for compression (> 15 messages)
+                    if len(self.current_session_data.get("chat_history", [])) > 15:
+                        print("System: Compressing session history to optimize token space...")
+                        try:
+                            history_to_compress = self.current_session_data["chat_history"][:-4]
+                            retained_history = self.current_session_data["chat_history"][-4:]
+                            
+                            compression_data = {
+                                "model": data.get("model", ""),
+                                "chat_history": history_to_compress,
+                                "language": data.get("language", "en")
+                            }
+                            summary = asyncio.run(call_agent_async("compress-history", compression_data))
+                            
+                            existing_summary = self.current_session_data.get("summary", "")
+                            if existing_summary:
+                                new_summary = f"{existing_summary}\n\nPreviously: {summary}"
+                            else:
+                                new_summary = summary
+                                
+                            self.current_session_data["summary"] = new_summary
+                            self.current_session_data["chat_history"] = retained_history
+                            print("System: History successfully compressed.")
+                        except Exception as compression_err:
+                            print(f"Error during automatic history compression: {compression_err}")
                 
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')

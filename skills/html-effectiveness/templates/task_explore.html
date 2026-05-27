@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent - Create Task</title>
+    <title>Agent - Explore</title>
     <style>
         :root {
             --ivory: #FAF9F5;
@@ -405,7 +405,7 @@
             width: 100%; 
             height: calc(100vh - 120px);
             align-items: stretch;
-            grid-template-columns: 75% 25%;
+            grid-template-columns: 25% 1fr;
             transition: grid-template-columns 0.3s ease;
         }
         .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
@@ -429,17 +429,13 @@
         }
         
         .side-panel.collapsed .debug-pre,
-        .side-panel.collapsed #agentOutput,
-        .side-panel.collapsed textarea,
         .side-panel.collapsed label,
-        .side-panel.collapsed #debug-status,
-        .side-panel.collapsed #agent-status { 
+        .side-panel.collapsed #debug-status { 
             display:none; 
         }
         
         /* Collapsed button styling */
-        .side-panel.collapsed #btn-toggle-debug,
-        .side-panel.collapsed #btn-toggle-agent { 
+        .side-panel.collapsed #btn-toggle-debug { 
             padding:0 !important; 
             width:48px !important; 
             height:48px !important; 
@@ -452,9 +448,11 @@
         }
         
         /* Grid layout adjustments based on collapsed state */
-        .layout-grid.agent-collapsed {
-            grid-template-columns: 1fr 64px !important;
+        .layout-grid.debug-collapsed {
+            grid-template-columns: 64px 1fr !important;
         }
+        
+
         
         .modal-content { max-height: 90vh; overflow:auto; }
 
@@ -469,8 +467,8 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
-            <a href="/explore" id="nav-explore" class="nav-link" data-i18n="navExplore">0. Explore</a>
-            <a href="/create" id="nav-create" class="nav-link active" data-i18n="navCreate">1. Create</a>
+            <a href="/explore" id="nav-explore" class="nav-link active" data-i18n="navExplore">0. Explore</a>
+            <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
             <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
             <a href="/develop" id="nav-develop" class="nav-link" data-i18n="navDevelop">3. Develop</a>
             <a href="/testing" id="nav-testing" class="nav-link" data-i18n="navTesting">4. Test & Regression</a>
@@ -483,73 +481,104 @@
                 <option value="en">EN</option>
                 <option value="zh">中文</option>
             </select>
+            <button id="btn-configure" class="btn btn-secondary" onclick="openAgentConfigModal()" style="white-space:nowrap;">Configure</button>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="card">
-            <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
-            <h1 data-i18n="titleCreate">Create a New Task</h1>
-            <div class="subtitle" data-i18n="subCreate">Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.</div>
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
 
-    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; grid-template-columns: 1fr; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
         <!-- Main Card (left) -->
 
         <div class="main-panel">
-            <div class="card">
-                <div class="eyebrow" data-i18n="eyebrowInit">Task Initiation</div>
-                <h1 data-i18n="titleCreate">Create a New Task</h1>
-                <div class="subtitle" data-i18n="subCreate">Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.</div>
-
-                <form id="createForm" onsubmit="handleCreate(event)">
-                    <div class="form-group">
-                        <label data-i18n="lblTitle">Task Title</label>
-                        <input type="text" id="title" data-i18n-ph="phTitle" placeholder="e.g. Implement CLI file-indexer" required>
+            <div class="card" style="display:flex; flex-direction:column; height:100%;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                    <div>
+                        <div class="eyebrow" data-i18n="eyebrowExplore">Task Exploration</div>
+                        <h1 style="margin:0;" data-i18n="titleAgentTerminal">Agent Terminal</h1>
                     </div>
-                    <div class="form-group">
-                        <label data-i18n="lblCategory">Category</label>
-                        <select id="category">
-                            <option value="Feature" data-i18n="optFeature">Feature</option>
-                            <option value="Bugfix" data-i18n="optBugfix">Bugfix</option>
-                            <option value="Refactor" data-i18n="optRefactor">Refactor</option>
-                            <option value="Research" data-i18n="optResearch">Research</option>
-                        </select>
-                        <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com/...">
-                        <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
+                    <div style="display:flex; gap:12px;">
+                        <button type="button" class="btn btn-secondary" onclick="openReferencesModal()" data-i18n="btnManageRef">Manage Context</button>
+                        <button type="button" class="btn btn-primary" onclick="window.location.href='/create'" data-i18n="btnProceed">Proceed to Create Task</button>
                     </div>
-                    <div id="referencesList" class="ref-list"></div>
                 </div>
-
-                <div class="btn-row">
-                    <button type="button" class="btn btn-secondary" id="btn-copy-scoping" onclick="copyScopingMarkdown()" data-i18n="btnCopyScoping">Copy Scoping as Markdown</button>
-                    <button type="submit" class="btn btn-primary btn-full" id="btn-create" data-i18n="btnSubmit">Submit Task</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Debug Console -->
-        <button class="debug-toggle-btn" onclick="document.querySelector('.debug-console').classList.toggle('open')">Debug</button>
-        <div class="debug-console">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
-                <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div id="loading-indicator" style="display: none; align-items: center; color: var(--clay); font-size: 0.8125rem;">
-                        <div class="spinner"></div> <span data-i18n="processing">Processing...</span>
-                    </div>
-                    <button type="button" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; color: var(--gray-500); padding: 0;" onclick="document.querySelector('.debug-console').classList.remove('open')">&times;</button>
-                </div>
-                <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
-                <textarea id="agentInput" rows="4" placeholder="Message to agent..." style="width:100%;"></textarea>
+                
+                <div id="terminalOutput" style="background:var(--slate); color:var(--olive); font-family:var(--mono); flex:1; overflow-y:auto; padding:1rem; border-radius:6px; margin-bottom:1rem; white-space:pre-wrap; font-size: 0.9rem;">Ready. Ask me anything about the codebase...</div>
+                
                 <div style="display:flex; gap:8px;">
-                    <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                    <textarea id="terminalInput" rows="2" style="flex:1; font-family:var(--mono);" placeholder="Ask the agent to explore..."></textarea>
+                    <button id="btn-send" class="btn btn-primary" onclick="sendTerminalMessage()">Send</button>
                 </div>
-                <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.9rem;"></div>
             </div>
-            <pre id="globalDebug" class="debug-pre" >Ready. Waiting for user interaction...</pre>
         </div>
+
+    </div>
+
+    <!-- References Modal -->
+    <div id="referencesModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowContext">Context</div>
+                    <h2 style="margin:0;" data-i18n="titleReferences">Reference Documents & Code</h2>
+                </div>
+                <button type="button" onclick="closeReferencesModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-group" style="margin-top: 1.5rem;">
+                <div class="reference-row">
+                    <select id="refType" class="reference-type">
+                        <option value="local" data-i18n="optLocal">Local Path</option>
+                        <option value="url" data-i18n="optUrl">URL</option>
+                    </select>
+                    <input type="text" id="refInput" class="reference-input" placeholder="e.g. src/main.py or https://github.com...">
+                    <button type="button" class="reference-btn-add" onclick="addReference()" data-i18n="btnAddRef">Import</button>
+                </div>
+                <div id="referencesList" class="ref-list" style="margin-top: 1rem;"></div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-top:1rem;">
+                <button type="button" class="btn btn-primary" onclick="closeReferencesModal()">Done</button>
+            </div>
+        </div>
+    </div>
+
     </div>
 
     <script>
@@ -561,7 +590,12 @@
                 navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 modelLoading: 'Loading models...',
-                eyebrowInit: 'Task Initiation',
+                eyebrowExplore: 'Task Exploration',
+                titleAgentTerminal: 'Agent Terminal',
+                btnManageRef: 'Manage Context',
+                btnProceed: 'Proceed to Create Task',
+                eyebrowContext: 'Context',
+                titleReferences: 'Reference Documents & Code',
                 titleCreate: 'Create a New Task',
                 subCreate: 'Scope, organize, and submit your new coding task. The agent will design a custom specification inside the Spec tab.',
                 lblTitle: 'Task Title',
@@ -594,7 +628,12 @@
                 navDevelop: '3. 原型',
                 navTesting: '4. 測試與回歸',
                 modelLoading: '載入模型中...',
-                eyebrowInit: '任務啟動',
+                eyebrowExplore: '任務探索',
+                titleAgentTerminal: 'Agent 終端機',
+                btnManageRef: '管理上下文',
+                btnProceed: '繼續建立任務',
+                eyebrowContext: '上下文',
+                titleReferences: '參考文件與程式碼',
                 titleCreate: '建立新任務',
                 subCreate: '定義、組織並提交您的新程式開發任務。Agent 會在「規格」分頁中設計專屬規格。',
                 lblTitle: '任務標題',
@@ -744,13 +783,7 @@
                 const stateRes = await fetch('/api/state');
                 const stateData = await stateRes.json();
                 if (stateData.status === 'success') {
-                    if (stateData.state.create_data) {
-                        const c = stateData.state.create_data;
-                        if (c.title) document.getElementById('title').value = c.title;
-                        if (c.category) document.getElementById('category').value = c.category;
-                        if (c.goal) document.getElementById('goal').value = c.goal;
-                        if (c.context) document.getElementById('context').value = c.context;
-                    }
+
                     if (stateData.state.references) {
                         activeReferences = stateData.state.references;
                     }
@@ -760,12 +793,29 @@
                 console.error('Could not fetch state', err);
             }
 
-            // Fetch models
+            await loadAgentConfig();
+            await refreshModelSelect();
+            
+            setTimeout(() => {
+                document.querySelectorAll('textarea').forEach(autoResizeTextarea);
+            }, 50);
+        });
+
+        function setAgentConfigFeedback(message, isError = false) {
+            const feedback = document.getElementById('agentConfigFeedback');
+            if (!feedback) return;
+            feedback.textContent = message;
+            feedback.style.color = isError ? 'var(--red)' : 'var(--olive)';
+        }
+
+        async function refreshModelSelect() {
             try {
                 const res = await fetch('/api/models');
                 const data = await res.json();
                 if (data.status === 'success') {
                     const select = document.getElementById('globalModelSelect');
+                    if (!select) return;
+                    const current = select.value;
                     select.innerHTML = '';
                     const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
                     data.models.forEach(model => {
@@ -775,6 +825,9 @@
                         if (model === defaultModel) option.selected = true;
                         select.appendChild(option);
                     });
+                    if (current && data.models.includes(current)) {
+                        select.value = current;
+                    }
                 }
             } catch (err) {
                 console.error('Could not load models', err);
@@ -849,16 +902,26 @@
             if (modal) modal.style.display = 'none';
         }
 
+        function openReferencesModal() {
+            const modal = document.getElementById('referencesModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                renderReferences();
+            }
+        }
+        
+        function closeReferencesModal() {
+            const modal = document.getElementById('referencesModal');
+            if (modal) modal.style.display = 'none';
+        }
+
         // Update grid layout based on collapsed state
         function updateGridLayout(){
             const debugCollapsed = document.getElementById('debugPanel')?.classList.contains('collapsed');
-            const agentCollapsed = document.getElementById('agentPanel')?.classList.contains('collapsed');
             const grid = document.querySelector('.layout-grid');
             if(!grid) return;
-            grid.classList.remove('debug-collapsed', 'agent-collapsed', 'both-collapsed');
-            if(debugCollapsed && agentCollapsed) grid.classList.add('both-collapsed');
-            else if(debugCollapsed) grid.classList.add('debug-collapsed');
-            else if(agentCollapsed) grid.classList.add('agent-collapsed');
+            grid.classList.remove('debug-collapsed');
+            if(debugCollapsed) grid.classList.add('debug-collapsed');
         }
 
         // Toggle side panels
@@ -866,46 +929,34 @@
             const console = document.getElementById('debugConsole');
             console.classList.toggle('open');
         }
-        function toggleAgentPanel(){
-            const panel = document.getElementById('agentPanel');
-            const btn = document.getElementById('btn-toggle-agent');
-            if(!panel) return;
-            panel.classList.toggle('collapsed');
-            if(btn) btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
-            updateGridLayout();
-        }
 
-        async function sendAgentMessage(){
-            const input = document.getElementById('agentInput');
-            const out = document.getElementById('agentOutput');
+        async function sendTerminalMessage(){
+            const input = document.getElementById('terminalInput');
+            const out = document.getElementById('terminalOutput');
             const modelSelect = document.getElementById('globalModelSelect');
             if(!input || !out) return;
             const msg = input.value.trim();
             if(!msg) return;
-            appendAgentOutput('> ' + msg);
+            out.textContent += '\n\n> User:\n' + msg;
             input.value = '';
+            out.scrollTop = out.scrollHeight;
             try {
-                setLoading(true, null);
-                const payload = { command: 'chat', data: { messages: [{ role:'user', content: msg }], model: modelSelect?modelSelect.value:undefined } };
+                setLoading(true, 'btn-send');
+                const payload = { command: 'task-explore', data: { context: msg, references: activeReferences, model: modelSelect?modelSelect.value:undefined } };
                 const res = await fetch('/api/agent', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
                 const r = await res.json();
                 if(r.status==='success'){
-                    appendAgentOutput(r.response || JSON.stringify(r, null, 2));
-                    logDebug(`AGENT (ad-hoc): ${r.response? r.response.slice(0,200):''}`);
+                    out.textContent += '\n\n> Agent:\n' + (r.response || JSON.stringify(r, null, 2));
+                    logDebug(`AGENT (explore): ${r.response? r.response.slice(0,200):''}`);
                 } else {
-                    appendAgentOutput('ERROR: '+(r.message||'unknown'));
+                    out.textContent += '\n\nERROR: '+(r.message||'unknown');
                 }
             } catch(e){
-                appendAgentOutput('NETWORK ERROR: '+e.message);
-            } finally { setLoading(false, null); }
-        }
-        function appendAgentOutput(text){
-            const out = document.getElementById('agentOutput');
-            if(!out) return;
-            const div = document.createElement('div');
-            div.textContent = text;
-            out.appendChild(div);
-            out.scrollTop = out.scrollHeight;
+                out.textContent += '\n\nNETWORK ERROR: '+e.message;
+            } finally { 
+                setLoading(false, 'btn-send'); 
+                out.scrollTop = out.scrollHeight;
+            }
         }
 
         // Start polling debug logs
@@ -923,84 +974,7 @@
             }
         });
 
-        async function handleCreate(event) {
-            event.preventDefault();
-            const btnId = 'btn-create';
-            const data = {
-                title: document.getElementById('title').value,
-                category: document.getElementById('category').value,
-                goal: document.getElementById('goal').value,
-                context: document.getElementById('context').value,
-                references: activeReferences,
-                language: localStorage.getItem('app_lang') || 'en'
-            };
 
-            setLoading(true, btnId);
-            const modelSelect = document.getElementById('globalModelSelect');
-            data.model = modelSelect ? modelSelect.value : 'gemini-3.1-flash-lite';
-            logDebug(`Sending 'task-create' request using model ${data.model}...`);
-
-            try {
-                const res = await fetch('/api/agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ command: 'task-create', data })
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-create):\n` + result.response);
-                    logDebug(`Redirecting to Spec...`);
-                    setTimeout(() => {
-                        window.location.href = '/spec';
-                    }, 1200);
-                } else {
-                    logDebug(`ERROR (task-create):\n` + (result.message || 'Unknown error'));
-                }
-            } catch (err) {
-                logDebug(`NETWORK ERROR (task-create):\n` + err.message);
-            } finally {
-                setLoading(false, btnId);
-            }
-        }
-
-        function copyScopingMarkdown() {
-            const title = document.getElementById('title').value || 'Untitled Task';
-            const category = document.getElementById('category').value;
-            const goal = document.getElementById('goal').value || 'No goal provided.';
-            const context = document.getElementById('context').value || 'No context provided.';
-            
-            let markdown = `# Task Scoping: ${title}\n\n- **Category:** ${category}\n\n## Goal\n${goal}\n\n## Background Context\n${context}`;
-            
-            if (activeReferences.length > 0) {
-                markdown += "\n\n## Reference Materials\n";
-                activeReferences.forEach(ref => {
-                    markdown += `- [${ref.type.toUpperCase()}] ${ref.value}\n`;
-                });
-            }
-
-            const btn = document.getElementById('btn-copy-scoping');
-            function flash() {
-                const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                btn.textContent = dict['copied'] || 'Copied';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.textContent = dict['btnCopyScoping'] || 'Copy Scoping as Markdown';
-                    btn.classList.remove('copied');
-                }, 1200);
-            }
-
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(markdown).then(flash, flash);
-            } else {
-                const ta = document.createElement('textarea');
-                ta.value = markdown;
-                document.body.appendChild(ta);
-                ta.select();
-                try { document.execCommand('copy'); } catch (e) {}
-                document.body.removeChild(ta);
-                flash();
-            }
-        }
     </script>
     <script src="/sessions.js"></script>
 

@@ -319,6 +319,109 @@
         @keyframes spin {
             100% { transform: rotate(360deg); }
         }
+    /* Layout and modal styles */
+        .layout-grid { 
+            width: 100%; 
+            height: calc(100vh - 120px);
+            align-items: stretch;
+            grid-template-columns: 75% 25%;
+            transition: grid-template-columns 0.3s ease;
+        }
+        .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .main-panel > .card { flex: 1; overflow-y: auto; }
+        .side-panel { 
+            min-height: 240px; 
+            width:100%; 
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .debug-panel { width:100%; }
+        .debug-pre { overflow-y: hidden; }
+        .debug-pre:hover { overflow-y: auto; }
+        .agent-panel { width:100%; }
+        
+        /* Hide content when collapsed, show only button */
+        .side-panel.collapsed { 
+            padding:0 !important;
+            min-height: 56px;
+            max-height: 56px;
+        }
+        
+        .side-panel.collapsed .debug-pre,
+        .side-panel.collapsed #agentOutput,
+        .side-panel.collapsed textarea,
+        .side-panel.collapsed label,
+        .side-panel.collapsed #debug-status,
+        .side-panel.collapsed #agent-status { 
+            display:none; 
+        }
+        
+        /* Collapsed button styling */
+        .side-panel.collapsed #btn-toggle-debug,
+        .side-panel.collapsed #btn-toggle-agent { 
+            padding:0 !important; 
+            width:48px !important; 
+            height:48px !important; 
+            display:flex !important; 
+            align-items:center; 
+            justify-content:center; 
+            font-weight:bold;
+            font-size:1.4rem;
+            line-height:1;
+        }
+        
+        /* Grid layout adjustments based on collapsed state */
+        .layout-grid.agent-collapsed {
+            grid-template-columns: 1fr 64px !important;
+        }
+        
+        .modal-content { max-height: 90vh; overflow:auto; }
+
+        @media (max-width: 900px) {
+            .layout-grid { grid-template-columns: 1fr !important; }
+            .side-panel { width:100% !important; }
+        }
+    
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 35vh;
+            background-color: var(--paper);
+            border-top: 1.5px solid var(--gray-200);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            resize: vertical;
+            direction: ltr;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        .debug-console.open {
+            transform: translateY(0);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            flex: 1;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
     </style>
 </head>
 <body>
@@ -326,9 +429,10 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
+            <button id="nav-explore" class="nav-link" onclick="window.location.href='/explore'" data-i18n="navExplore">0. Explore</button>
             <button id="nav-create" class="nav-link" onclick="switchView('create')" data-i18n="navCreate">1. Create</button>
             <button id="nav-spec" class="nav-link" onclick="switchView('spec')" data-i18n="navSpec">2. Spec</button>
-            <button id="nav-prototype" class="nav-link" onclick="switchView('prototype')" data-i18n="navPrototype">3. Prototype</button>
+            <button id="nav-develop" class="nav-link" onclick="switchView('develop')" data-i18n="navDevelop">3. Develop</button>
             <button id="nav-testing" class="nav-link" onclick="switchView('testing')" data-i18n="navTesting">4. Test & Regression</button>
         </div>
         <div class="nav-right">
@@ -342,7 +446,50 @@
         </div>
     </nav>
 
-    <div class="container">
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+        <!-- Main Card (left) -->
+
+        <div class="main-panel">
         <!-- 1. CREATE VIEW -->
         <div id="view-create" class="view-section">
             <div class="card">
@@ -388,11 +535,11 @@
             </div>
         </div>
 
-        <!-- 3. PROTOTYPE VIEW PLACEHOLDER -->
-        <div id="view-prototype" class="view-section" data-empty="true" style="display:none;">
+        <!-- 3. DEVELOP VIEW PLACEHOLDER -->
+        <div id="view-develop" class="view-section" data-empty="true" style="display:none;">
             <div class="placeholder-card">
-                <h2 data-i18n="protoTitle">Prototyping & Architecture Stage</h2>
-                <p data-i18n="protoDesc">No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.</p>
+                <h2 data-i18n="developTitle">Prototyping & Architecture Stage</h2>
+                <p data-i18n="developDesc">No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.</p>
             </div>
         </div>
 
@@ -415,6 +562,15 @@
                     </div>
                     <button type="button" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; color: var(--gray-500); padding: 0;" onclick="document.querySelector('.debug-console').classList.remove('open')">&times;</button>
                 </div>
+                <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
+                <textarea id="agentInput" rows="4" placeholder="Message to agent..." style="width:100%;"></textarea>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                </div>
+                <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.9rem;"></div>
             </div>
             <pre id="globalDebug" class="debug-pre" >Ready. Waiting for user interaction...</pre>
         </div>
@@ -426,7 +582,7 @@
                 brandSpan: 'Workflow',
                 navCreate: '1. Create',
                 navSpec: '2. Spec',
-                navPrototype: '3. Prototype',
+                navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 testingTitle: 'Verification & Regression Stage',
                 testingDesc: 'No active testing session has been initialized yet. Please finalize your specifications and click Finalize & Execute inside the Prototyping tab to write code and unlock verification.',
@@ -449,8 +605,8 @@
                 optResearch: 'Research',
                 specTitle: 'Specification Stage',
                 specDesc: 'No specifications have been generated yet. Please fill out the scoping form in the Create tab and click Submit Task to generate them.',
-                protoTitle: 'Prototyping & Architecture Stage',
-                protoDesc: 'No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.',
+                developTitle: 'Prototyping & Architecture Stage',
+                developDesc: 'No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.',
                 consoleTitle: 'System Console & AI Output',
                 processing: 'Processing...',
                 consoleReady: 'Ready. Waiting for user interaction...',
@@ -460,7 +616,7 @@
                 brandSpan: '工作流',
                 navCreate: '1. 建立',
                 navSpec: '2. 規格',
-                navPrototype: '3. 原型',
+                navDevelop: '3. 開發',
                 navTesting: '4. 測試與回歸',
                 testingTitle: '驗證與回歸階段',
                 testingDesc: '尚未初始化任何測試會話。請先在規格分頁中確認規格，並點擊原型分頁中的「確認並執行」將程式碼寫入工作區，解鎖測試驗證。',
@@ -483,8 +639,8 @@
                 optResearch: '研究 (Research)',
                 specTitle: '規格階段',
                 specDesc: '尚未生成任何規格。請先在「建立」分頁中填寫範圍表單並點擊「提交任務」來生成。',
-                protoTitle: '原型與架構階段',
-                protoDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認您的規格，並點擊「產生原型」。',
+                developTitle: '原型與架構階段',
+                developDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認您的規格，並點擊「產生原型」。',
                 consoleTitle: '系統終端與 AI 輸出',
                 processing: '處理中...',
                 consoleReady: '就緒。等待使用者操作...',
@@ -517,7 +673,7 @@
 
         function getActiveTabFromUrl() {
             const path = window.location.pathname.replace(/^\/+/, '');
-            if (['create', 'spec', 'prototype'].includes(path)) {
+            if (['create', 'spec', 'develop'].includes(path)) {
                 return path;
             }
             return null;
@@ -585,8 +741,8 @@
             // Resolve initial active tab
             let defaultTab = 'create';
             const specDiv = document.getElementById('view-spec');
-            const protoDiv = document.getElementById('view-prototype');
-            if (protoDiv && !protoDiv.dataset.empty) defaultTab = 'prototype';
+            const developDiv = document.getElementById('view-develop');
+            if (developDiv && !developDiv.dataset.empty) defaultTab = 'develop';
             else if (specDiv && !specDiv.dataset.empty) defaultTab = 'spec';
 
             const activeTab = getActiveTabFromUrl() || sessionStorage.getItem('activeTab') || defaultTab;
@@ -594,7 +750,7 @@
         });
 
         function switchView(viewName, updateUrl = true) {
-            const sections = ['create', 'spec', 'prototype', 'testing'];
+            const sections = ['create', 'spec', 'develop', 'testing'];
             sections.forEach(sec => {
                 const el = document.getElementById('view-' + sec);
                 const btn = document.getElementById('nav-' + sec);
@@ -623,11 +779,11 @@
                 const data = await res.json();
                 const pre = document.getElementById('globalDebug');
                 if (data.status === 'success' && pre) {
-                    if (data.logs) {
-                        pre.textContent = data.logs;
-                    } else {
-                        const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                        pre.textContent = dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
+                    const dict = (typeof i18n !== 'undefined') ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
+                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
+                    if (pre.textContent !== newText) {
+                        pre.textContent = newText;
+                        pre.scrollTop = pre.scrollHeight;
                     }
                 }
             } catch (e) {}
@@ -736,5 +892,17 @@ ${context}`;
             }
         }
     </script>
+    <script src="/sessions.js"></script>
+
+    <!-- Floating Debug Console -->
+    <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>
+    <div class="debug-console" id="debugConsole">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <label style="margin:0; font-family:var(--mono); font-size:0.8125rem; color:var(--gray-800); font-weight:600;" data-i18n="consoleTitle">System Console & AI Output</label>
+            <div id="debug-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Live</div>
+        </div>
+        <pre id="globalDebug" class="debug-pre" style="flex:1;">Ready. Waiting for user interaction...</pre>
+    </div>
+
 </body>
 </html>

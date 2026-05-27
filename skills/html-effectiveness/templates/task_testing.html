@@ -438,25 +438,64 @@
             100% { transform: rotate(360deg); }
         }
 
-        .debug-console {
-            position: fixed;
-            top: 0;
-            right: 0;
-            width: 400px;
-            height: 100vh;
-            background-color: var(--paper);
-            border-left: 1.5px solid var(--gray-200);
-            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
-            z-index: 1001;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            transform: translateX(100%);
-            transition: transform 0.3s ease;
-            resize: horizontal;
-            direction: rtl;
-            overflow: auto;
+        
+    /* Layout and modal styles */
+        .layout-grid { 
+            width: 100%; 
+            height: calc(100vh - 120px);
+            align-items: stretch;
+            grid-template-columns: 75% 25%;
+            transition: grid-template-columns 0.3s ease;
         }
+        .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .main-panel > .card { flex: 1; overflow-y: auto; }
+        .side-panel { 
+            min-height: 240px; 
+            width:100%; 
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .debug-panel { width:100%; }
+        .debug-pre { overflow-y: hidden; }
+        .debug-pre:hover { overflow-y: auto; }
+        .agent-panel { width:100%; }
+        
+        /* Hide content when collapsed, show only button */
+        .side-panel.collapsed { 
+            padding:0 !important;
+            min-height: 56px;
+            max-height: 56px;
+        }
+        
+        .side-panel.collapsed .debug-pre,
+        .side-panel.collapsed #agentOutput,
+        .side-panel.collapsed textarea,
+        .side-panel.collapsed label,
+        .side-panel.collapsed #debug-status,
+        .side-panel.collapsed #agent-status { 
+            display:none; 
+        }
+        
+        /* Collapsed button styling */
+        .side-panel.collapsed #btn-toggle-debug,
+        .side-panel.collapsed #btn-toggle-agent { 
+            padding:0 !important; 
+            width:48px !important; 
+            height:48px !important; 
+            display:flex !important; 
+            align-items:center; 
+            justify-content:center; 
+            font-weight:bold;
+            font-size:1.4rem;
+            line-height:1;
+        }
+        
+        /* Grid layout adjustments based on collapsed state */
+        .layout-grid.agent-collapsed {
+            grid-template-columns: 1fr 64px !important;
+        }
+        
+        .modal-content { max-height: 90vh; overflow:auto; }
 
         .debug-console > * {
             direction: ltr;
@@ -495,6 +534,47 @@
             margin: 0;
             font-family: var(--mono);
         }
+    
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 35vh;
+            background-color: var(--paper);
+            border-top: 1.5px solid var(--gray-200);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            resize: vertical;
+            direction: ltr;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        .debug-console.open {
+            transform: translateY(0);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            flex: 1;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
     </style>
 </head>
 <body>
@@ -502,9 +582,10 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
+            <a href="/explore" id="nav-explore" class="nav-link" data-i18n="navExplore">0. Explore</a>
             <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
             <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
-            <a href="/prototype" id="nav-prototype" class="nav-link" data-i18n="navPrototype">3. Prototype</a>
+            <a href="/develop" id="nav-develop" class="nav-link" data-i18n="navDevelop">3. Develop</a>
             <a href="/testing" id="nav-testing" class="nav-link active" data-i18n="navTesting">4. Test & Regression</a>
         </div>
         <div class="nav-right">
@@ -518,12 +599,55 @@
         </div>
     </nav>
 
-    <div class="container">
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+        <!-- Main Card (left) -->
+
+        <div class="main-panel">
         <!-- Stage mismatch placeholder -->
         <div id="view-placeholder" class="placeholder-card" style="display:none;">
             <h2 data-i18n="placeholderTitle">Verification Stage Locked</h2>
-            <p data-i18n="placeholderDesc">You must finalize the prototyping & execution stage first. Please review your code tree and snippets in the Prototype tab, then click Finalize & Execute to transition here.</p>
-            <a href="/prototype" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="placeholderBtn">Go to Prototype</a>
+            <p data-i18n="placeholderDesc">You must finalize the prototyping & execution stage first. Please review your code tree and snippets in the Develop tab, then click Finalize & Execute to transition here.</p>
+            <a href="/develop" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="placeholderBtn">Go to Develop</a>
         </div>
 
         <!-- Main Testing View -->
@@ -672,8 +796,8 @@
     </div>
 
     <!-- System Console and AI Output -->
-    <button class="debug-toggle-btn" onclick="document.querySelector('.debug-console').classList.toggle('open')">Debug</button>
-    <div class="debug-console">
+    <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>
+    <div class="debug-console" id="debugConsole">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
             <label style="margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--gray-800); font-weight: 600;" data-i18n="consoleTitle">System Console & AI Output</label>
             <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -692,12 +816,12 @@
                 brandSpan: 'Workflow',
                 navCreate: '1. Create',
                 navSpec: '2. Spec',
-                navPrototype: '3. Prototype',
+                navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 modelLoading: 'Loading models...',
                 placeholderTitle: 'Verification Stage Locked',
-                placeholderDesc: 'You must finalize the prototyping & execution stage first. Please review your code tree and snippets in the Prototype tab, then click Finalize & Execute to transition here.',
-                placeholderBtn: 'Go to Prototype',
+                placeholderDesc: 'You must finalize the prototyping & execution stage first. Please review your code tree and snippets in the Develop tab, then click Finalize & Execute to transition here.',
+                placeholderBtn: 'Go to Develop',
                 eyebrowEnv: 'Environment Variables',
                 titleEnv: 'Run Configuration variables',
                 btnManageEnv: '[ Manage Env Vars ]',
@@ -740,7 +864,7 @@
                 brandSpan: '工作流',
                 navCreate: '1. 建立',
                 navSpec: '2. 規格',
-                navPrototype: '3. 原型',
+                navDevelop: '3. 原型',
                 navTesting: '4. 測試與回歸',
                 modelLoading: '載入模型中...',
                 placeholderTitle: '驗證階段尚未解鎖',
@@ -1266,8 +1390,8 @@
                 data: {
                     feedback_input: feedback,
                     test_logs: testLogs,
-                    code_snippets: appState.prototype_data.code_snippets,
-                    file_tree: appState.prototype_data.file_tree,
+                    code_snippets: appState.develop_data.code_snippets,
+                    file_tree: appState.develop_data.file_tree,
                     model: model,
                     language: localStorage.getItem('app_lang') || 'en',
                     workspace_path: '.'
@@ -1329,6 +1453,195 @@
             await fetchState();
             await fetchDebugLogs();
         });
+    
+        async function refreshModelSelect() {
+            try {
+                const res = await fetch('/api/models');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const select = document.getElementById('globalModelSelect');
+                    if (!select) return;
+                    const current = select.value;
+                    select.innerHTML = '';
+                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model;
+                        option.textContent = model;
+                        if (model === defaultModel) option.selected = true;
+                        select.appendChild(option);
+                    });
+                    if (current && data.models.includes(current)) {
+                        select.value = current;
+                    }
+                }
+            } catch (err) {
+                console.error('Could not load models', err);
+            }
+        }
+
+        async function loadAgentConfig() {
+            try {
+                const res = await fetch('/api/agent-config');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    document.getElementById('geminiApiKey').value = data.config.GEMINI_API_KEY || '';
+                    document.getElementById('anthropicApiKey').value = data.config.ANTHROPIC_API_KEY || '';
+                    document.getElementById('vllmApiUrl').value = data.config.VLLM_API_URL || '';
+                    document.getElementById('vllmDefaultModel').value = data.config.VLLM_DEFAULT_MODEL || 'devstral';
+
+                    const backendStatus = [];
+                    if (data.available_backends.gemini) backendStatus.push('Gemini: configured');
+                    else backendStatus.push('Gemini: not configured');
+                    if (data.available_backends.anthropic) backendStatus.push('Anthropic: configured');
+                    else backendStatus.push('Anthropic: not configured');
+                    if (data.available_backends.vllm) backendStatus.push('VLLM: configured');
+                    else backendStatus.push('VLLM: not configured');
+                    document.getElementById('backendStatus').textContent = backendStatus.join(' · ');
+                }
+            } catch (err) {
+                console.error('Could not load agent config', err);
+                setAgentConfigFeedback('Failed to load agent configuration.', true);
+            }
+        }
+
+        async function saveAgentConfig() {
+            const payload = {
+                config: {
+                    GEMINI_API_KEY: document.getElementById('geminiApiKey').value.trim(),
+                    ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
+                    VLLM_API_URL: document.getElementById('vllmApiUrl').value.trim(),
+                    VLLM_DEFAULT_MODEL: document.getElementById('vllmDefaultModel').value.trim() || 'devstral'
+                }
+            };
+
+            try {
+                const res = await fetch('/api/agent-config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+                if (result.status === 'success') {
+                    setAgentConfigFeedback('Agent settings saved successfully.');
+                    await loadAgentConfig();
+                    await refreshModelSelect();
+                } else {
+                    setAgentConfigFeedback(result.message || 'Failed to save agent settings.', true);
+                }
+            } catch (err) {
+                setAgentConfigFeedback('Failed to save agent settings.', true);
+                console.error('saveAgentConfig error', err);
+            }
+        }
+
+        // Modal open/close for agent configuration
+        function openAgentConfigModal() {
+            const modal = document.getElementById('agentConfigModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                loadAgentConfig();
+            }
+        }
+        function closeAgentConfigModal() {
+            const modal = document.getElementById('agentConfigModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        // Update grid layout based on collapsed state
+        function updateGridLayout(){
+            const debugCollapsed = document.getElementById('debugPanel')?.classList.contains('collapsed');
+            const agentCollapsed = document.getElementById('agentPanel')?.classList.contains('collapsed');
+            const grid = document.querySelector('.layout-grid');
+            if(!grid) return;
+            grid.classList.remove('debug-collapsed', 'agent-collapsed', 'both-collapsed');
+            if(debugCollapsed && agentCollapsed) grid.classList.add('both-collapsed');
+            else if(debugCollapsed) grid.classList.add('debug-collapsed');
+            else if(agentCollapsed) grid.classList.add('agent-collapsed');
+        }
+
+        // Toggle side panels
+                function toggleDebugConsole() {
+            const console = document.getElementById('debugConsole');
+            console.classList.toggle('open');
+        }
+        function toggleAgentPanel(){
+            const panel = document.getElementById('agentPanel');
+            const btn = document.getElementById('btn-toggle-agent');
+            if(!panel) return;
+            panel.classList.toggle('collapsed');
+            if(btn) btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+            updateGridLayout();
+        }
+
+        async function sendAgentMessage(){
+            const input = document.getElementById('agentInput');
+            const out = document.getElementById('agentOutput');
+            const modelSelect = document.getElementById('globalModelSelect');
+            if(!input || !out) return;
+            const msg = input.value.trim();
+            if(!msg) return;
+            appendAgentOutput('> ' + msg);
+            input.value = '';
+            try {
+                setLoading(true, null);
+                const payload = { command: 'chat', data: { messages: [{ role:'user', content: msg }], model: modelSelect?modelSelect.value:undefined } };
+                const res = await fetch('/api/agent', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+                const r = await res.json();
+                if(r.status==='success'){
+                    appendAgentOutput(r.response || JSON.stringify(r, null, 2));
+                    logDebug(`AGENT (ad-hoc): ${r.response? r.response.slice(0,200):''}`);
+                } else {
+                    appendAgentOutput('ERROR: '+(r.message||'unknown'));
+                }
+            } catch(e){
+                appendAgentOutput('NETWORK ERROR: '+e.message);
+            } finally { setLoading(false, null); }
+        }
+        function appendAgentOutput(text){
+            const out = document.getElementById('agentOutput');
+            if(!out) return;
+            const div = document.createElement('div');
+            div.textContent = text;
+            out.appendChild(div);
+            out.scrollTop = out.scrollHeight;
+        }
+
+        // Start polling debug logs
+        fetchDebugLogs();
+        
+        async function fetchDebugLogs() {
+            try {
+                const res = await fetch('/api/debug');
+                const data = await res.json();
+                const pre = document.getElementById('globalDebug');
+                if (data.status === 'success' && pre) {
+                    const dict = (typeof i18n !== 'undefined' && i18n[localStorage.getItem('app_lang') || 'en']) ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
+                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
+                    if (pre.textContent !== newText) {
+                        pre.textContent = newText;
+                        pre.scrollTop = pre.scrollHeight;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        async function logDebug(message) {
+            try {
+                await fetch('/api/debug', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message: message })
+                });
+                await fetchDebugLogs();
+            } catch (e) {}
+        }
+
+        setInterval(fetchDebugLogs, 3000);
     </script>
+    <script src="/sessions.js"></script>
+
+
+
 </body>
 </html>

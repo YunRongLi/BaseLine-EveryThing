@@ -3,7 +3,35 @@ from http.server import HTTPServer
 from handler import AgentHTTPRequestHandler
 from config import load_env, check_api_key
 
+class ReusableHTTPServer(HTTPServer):
+    allow_reuse_address = True
+
+class DebugLogStream:
+
+    def __init__(self, original_stream, is_stderr=False):
+        self.original_stream = original_stream
+        self.is_stderr = is_stderr
+
+    def write(self, text):
+        self.original_stream.write(text)
+        self.original_stream.flush()
+        
+        cleaned = text.strip()
+        if cleaned:
+            # Dynamically import state to avoid circular dependencies
+            from state import WORKFLOW_STATE
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+            prefix = "[ERROR] " if self.is_stderr else ""
+            if "debug_logs" not in WORKFLOW_STATE:
+                WORKFLOW_STATE["debug_logs"] = ""
+            WORKFLOW_STATE["debug_logs"] = f"[{timestamp}] {prefix}{cleaned}\n\n" + WORKFLOW_STATE["debug_logs"]
+
+    def flush(self):
+        self.original_stream.flush()
+
 def find_free_port(start_port=8000):
+
     import socket
     port = start_port
     while port < 65535:
@@ -31,9 +59,14 @@ def listen_for_eof(server):
 def main():
     load_env()
     
+    # Redirect stdout and stderr to capture all logs for the web debug-console
+    sys.stdout = DebugLogStream(sys.stdout, is_stderr=False)
+    sys.stderr = DebugLogStream(sys.stderr, is_stderr=True)
+    
     if not check_api_key():
-        print("ERROR: Neither GEMINI_API_KEY nor ANTHROPIC_ADMIN_API_KEY environment variable is set.")
-        print("Please configure at least one API key in your system environment or within a local .env file.")
+
+        print("ERROR: No model backend is configured. Set GEMINI_API_KEY, ANTHROPIC_ADMIN_API_KEY, or VLLM_API_URL environment variable.")
+        print("Please configure a supported backend in your system environment or within a local .env file.")
         print("Exiting server startup.")
         sys.exit(1)
     
@@ -43,7 +76,8 @@ def main():
             os.chdir(target_dir)
             
     port = find_free_port()
-    server = HTTPServer(('127.0.0.1', port), AgentHTTPRequestHandler)
+    server = ReusableHTTPServer(('127.0.0.1', port), AgentHTTPRequestHandler)
+
     print(f"Server started at http://localhost:{port}")
     print("Press Ctrl+C or Ctrl+D (Ctrl+Z + Enter on Windows) to stop the server.")
     sys.stdout.flush()

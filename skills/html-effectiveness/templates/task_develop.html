@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent - Prototype & Execution</title>
+    <title>Agent - Develop & Execution</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
@@ -653,6 +653,109 @@
             padding: 0;
             border-radius: 0;
         }
+    /* Layout and modal styles */
+        .layout-grid { 
+            width: 100%; 
+            height: calc(100vh - 120px);
+            align-items: stretch;
+            grid-template-columns: 75% 25%;
+            transition: grid-template-columns 0.3s ease;
+        }
+        .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
+        .main-panel > .card { flex: 1; overflow-y: auto; }
+        .side-panel { 
+            min-height: 240px; 
+            width:100%; 
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .debug-panel { width:100%; }
+        .debug-pre { overflow-y: hidden; }
+        .debug-pre:hover { overflow-y: auto; }
+        .agent-panel { width:100%; }
+        
+        /* Hide content when collapsed, show only button */
+        .side-panel.collapsed { 
+            padding:0 !important;
+            min-height: 56px;
+            max-height: 56px;
+        }
+        
+        .side-panel.collapsed .debug-pre,
+        .side-panel.collapsed #agentOutput,
+        .side-panel.collapsed textarea,
+        .side-panel.collapsed label,
+        .side-panel.collapsed #debug-status,
+        .side-panel.collapsed #agent-status { 
+            display:none; 
+        }
+        
+        /* Collapsed button styling */
+        .side-panel.collapsed #btn-toggle-debug,
+        .side-panel.collapsed #btn-toggle-agent { 
+            padding:0 !important; 
+            width:48px !important; 
+            height:48px !important; 
+            display:flex !important; 
+            align-items:center; 
+            justify-content:center; 
+            font-weight:bold;
+            font-size:1.4rem;
+            line-height:1;
+        }
+        
+        /* Grid layout adjustments based on collapsed state */
+        .layout-grid.agent-collapsed {
+            grid-template-columns: 1fr 64px !important;
+        }
+        
+        .modal-content { max-height: 90vh; overflow:auto; }
+
+        @media (max-width: 900px) {
+            .layout-grid { grid-template-columns: 1fr !important; }
+            .side-panel { width:100% !important; }
+        }
+    
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 35vh;
+            background-color: var(--paper);
+            border-top: 1.5px solid var(--gray-200);
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            resize: vertical;
+            direction: ltr;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        .debug-console.open {
+            transform: translateY(0);
+        }
+
+        .debug-pre {
+            background: var(--slate);
+            border: 1.5px solid var(--slate);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            overflow-y: auto;
+            flex: 1;
+            color: var(--olive);
+            white-space: pre-wrap;
+            margin: 0;
+            font-family: var(--mono);
+        }
+
     </style>
 </head>
 <body>
@@ -660,9 +763,10 @@
     <nav class="navbar">
         <div class="navbar-brand">Agent <span data-i18n="brandSpan">Workflow</span></div>
         <div class="navbar-steps">
+            <a href="/explore" id="nav-explore" class="nav-link" data-i18n="navExplore">0. Explore</a>
             <a href="/create" id="nav-create" class="nav-link" data-i18n="navCreate">1. Create</a>
             <a href="/spec" id="nav-spec" class="nav-link" data-i18n="navSpec">2. Spec</a>
-            <a href="/prototype" id="nav-prototype" class="nav-link active" data-i18n="navPrototype">3. Prototype</a>
+            <a href="/develop" id="nav-develop" class="nav-link active" data-i18n="navDevelop">3. Develop</a>
             <a href="/testing" id="nav-testing" class="nav-link" data-i18n="navTesting">4. Test & Regression</a>
         </div>
         <div class="nav-right">
@@ -676,11 +780,54 @@
         </div>
     </nav>
 
-    <div class="container">
+    <!-- Agent Configuration Modal (opened via Configure button) -->
+    <div id="agentConfigModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); align-items:center; justify-content:center; z-index:1100;">
+        <div class="modal-content card" style="width:720px; max-width:95%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                <div>
+                    <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                </div>
+                <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
+            </div>
+            <div class="form-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:1rem; margin-top:1rem;">
+                <div>
+                    <label data-i18n="lblGeminiKey">Gemini API Key</label>
+                    <input type="text" id="geminiApiKey" placeholder="GEMINI_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblAnthropicKey">Anthropic API Key</label>
+                    <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
+                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
+                </div>
+                <div>
+                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
+                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label data-i18n="lblBackendStatus">Backend Status</label>
+                    <div id="backendStatus" style="padding:0.75rem 1rem; border:1px solid var(--gray-200); border-radius:8px; background:var(--ivory); min-height:48px;">Loading...</div>
+                </div>
+            </div>
+            <div id="agentConfigFeedback" style="margin-top:1rem; color:var(--olive); font-size:0.95rem;"></div>
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+                <button type="button" class="btn btn-secondary" onclick="closeAgentConfigModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="modal-save-agent-config" onclick="saveAgentConfig()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container layout-grid" style="width:calc(100% - 3rem); max-width:none; display:grid; gap:24px; margin:2.5rem auto; padding:0 1.5rem;">
+        <!-- Main Card (left) -->
+
+        <div class="main-panel">
         <!-- Placeholder View -->
         <div id="view-placeholder" class="placeholder-card" style="display:none;">
-            <h2 data-i18n="protoTitle">Prototyping & Architecture Stage</h2>
-            <p data-i18n="protoDesc">No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.</p>
+            <h2 data-i18n="developTitle">Prototyping & Architecture Stage</h2>
+            <p data-i18n="developDesc">No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.</p>
             <a href="/spec" class="btn btn-primary" style="margin-top: 1rem;" data-i18n="btnGoBack">Go to Spec Tab</a>
         </div>
 
@@ -716,8 +863,8 @@
             </div>
         </div>
 
-        <!-- Main Prototype Grid -->
-        <div id="view-main" class="layout-grid" style="display:none;">
+        <!-- Main Develop Grid -->
+        <div id="view-main" class="content-grid" style="display:none;">
             <!-- Left Column: Visual Structured List Editors -->
             <div>
                 <!-- File tree list editor -->
@@ -752,8 +899,8 @@
                 <div id="snippetsContainer"></div>
                 
                 <div style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1.5rem;">
-                    <button type="button" class="btn btn-secondary" id="btn-copy-proto" onclick="copyPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopyProto">Copy Prototype as Markdown</button>
-                    <button type="button" class="btn btn-secondary" id="btn-export-proto" onclick="exportPrototypeMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportProto">Export Prototype as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-copy-proto" onclick="copyDevelopMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnCopyDevelop">Copy Develop as Markdown</button>
+                    <button type="button" class="btn btn-secondary" id="btn-export-proto" onclick="exportDevelopMarkdown()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportDevelop">Export Develop as Markdown</button>
                     <button type="button" class="btn btn-secondary" id="btn-export-json" onclick="exportStateJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnExportJSON">Export State as JSON</button>
                     <button type="button" class="btn btn-secondary" id="btn-import-json" onclick="triggerImportJSON()" style="padding: 0.5rem 1rem; font-size: 0.8125rem;" data-i18n="btnImportJSON">Import State from JSON</button>
                     <input type="file" id="import-json-file" accept=".json" onchange="handleImportJSON(event)" style="display: none;">
@@ -813,7 +960,7 @@
                         <textarea id="feedbackInput" rows="5" data-i18n-ph="phFeedbackInput" placeholder="Provide implementation feedback or click Finalize & Execute to write changes..."></textarea>
                     </div>
                     <div class="btn-row" style="flex-direction: column;">
-                        <button type="button" class="btn btn-secondary btn-full" id="btn-update-proto" onclick="handleAgentCall(true)" data-i18n="btnUpdateProto">Update Prototype</button>
+                        <button type="button" class="btn btn-secondary btn-full" id="btn-update-proto" onclick="handleAgentCall(true)" data-i18n="btnUpdateDevelop">Update Develop</button>
                         <button type="button" class="btn btn-accent btn-full" id="btn-finalize" onclick="handleAgentCall(false)" data-i18n="btnFinalize">Finalize & Execute</button>
                     </div>
                 </div>
@@ -831,6 +978,15 @@
                     </div>
                     <button type="button" style="background: none; border: none; cursor: pointer; font-size: 1.2rem; color: var(--gray-500); padding: 0;" onclick="document.querySelector('.debug-console').classList.remove('open')">&times;</button>
                 </div>
+                <div id="agent-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Ready</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; flex:1;">
+                <textarea id="agentInput" rows="4" placeholder="Message to agent..." style="width:100%;"></textarea>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" onclick="sendAgentMessage()">Send</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('agentInput').value=''">Clear</button>
+                </div>
+                <div id="agentOutput" style="background:var(--gray-50); border:1px solid var(--gray-200); border-radius:8px; padding:0.75rem; flex:1; overflow-y:auto; font-family:var(--mono); font-size:0.9rem;"></div>
             </div>
             <pre id="globalDebug" class="debug-pre" >Ready. Waiting for user interaction...</pre>
         </div>
@@ -842,11 +998,11 @@
                 brandSpan: 'Workflow',
                 navCreate: '1. Create',
                 navSpec: '2. Spec',
-                navPrototype: '3. Prototype',
+                navDevelop: '3. Develop',
                 navTesting: '4. Test & Regression',
                 modelLoading: 'Loading models...',
-                protoTitle: 'Prototyping & Architecture Stage',
-                protoDesc: 'No prototype details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Prototype.',
+                developTitle: 'Prototyping & Architecture Stage',
+                developDesc: 'No develop details have been generated yet. Please finalize your specifications in the Spec tab and click Generate Develop.',
                 btnGoBack: 'Go to Spec Tab',
                 titleCompleted: 'Task Finalized & Implemented',
                 descCompleted: 'The agent has successfully applied modifications and written the final files into the workspace.',
@@ -863,8 +1019,8 @@
                 titleWorkflow: 'Workflow & Process Description',
                 titleSnippets: 'Core Implementation Snippets',
                 btnAddSnippet: '+ Add File Code',
-                btnCopyProto: 'Copy Prototype as Markdown',
-                btnExportProto: 'Export Prototype as Markdown',
+                btnCopyDevelop: 'Copy Develop as Markdown',
+                btnExportDevelop: 'Export Develop as Markdown',
                 eyebrowReferences: 'Reference Materials',
                 lblReferences: 'Import Reference Documents & Code',
                 btnAddRef: 'Import',
@@ -877,7 +1033,7 @@
                 titleAction: 'Submit Feedback or Execute',
                 lblFeedbackInput: 'Implementation Feedback or Custom Commands',
                 phFeedbackInput: 'Provide implementation feedback or click Finalize & Execute to write changes...',
-                btnUpdateProto: 'Update Prototype',
+                btnUpdateDevelop: 'Update Develop',
                 btnFinalize: 'Finalize & Execute',
                 consoleTitle: 'System Console & AI Output',
                 processing: 'Processing...',
@@ -890,11 +1046,11 @@
                 brandSpan: '工作流',
                 navCreate: '1. 建立',
                 navSpec: '2. 規格',
-                navPrototype: '3. 原型',
+                navDevelop: '3. 原型',
                 navTesting: '4. 測試與回歸',
                 modelLoading: '載入模型中...',
-                protoTitle: '原型與架構階段',
-                protoDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認規格，並點擊「產生原型」。',
+                developTitle: '原型與架構階段',
+                developDesc: '尚未生成任何原型細節。請先在「規格」分頁中確認規格，並點擊「產生原型」。',
                 btnGoBack: '前往「規格」分頁',
                 titleCompleted: '任務執行成功且已完成',
                 descCompleted: 'Agent 已經成功套用程式變更，並將最終程式碼寫入工作區中。',
@@ -911,8 +1067,8 @@
                 titleWorkflow: '了解原型運行流程與步驟',
                 titleSnippets: '核心實作程式碼片段',
                 btnAddSnippet: '+ 新增檔案程式碼',
-                btnCopyProto: '複製原型 (Markdown 格式)',
-                btnExportProto: '匯出原型 (Markdown 格式)',
+                btnCopyDevelop: '複製原型 (Markdown 格式)',
+                btnExportDevelop: '匯出原型 (Markdown 格式)',
                 eyebrowReferences: '參考資料匯入',
                 lblReferences: '匯入參考文件與程式碼',
                 btnAddRef: '匯入',
@@ -925,7 +1081,7 @@
                 titleAction: '提交反饋或執行程式寫入',
                 lblFeedbackInput: '實作反饋、細節調整指令或特殊修改',
                 phFeedbackInput: '請在此輸入您的修改反饋，或直接點擊「確認並執行」將上述程式碼與架構套用至工作區...',
-                btnUpdateProto: '更新原型與程式碼',
+                btnUpdateDevelop: '更新原型與程式碼',
                 btnFinalize: '確認並執行寫入',
                 consoleTitle: '系統終端與 AI 輸出',
                 processing: '處理中...',
@@ -967,7 +1123,7 @@
             });
         }
 
-        function generatePrototypeMarkdownText() {
+        function generateDevelopMarkdownText() {
             const file_tree = gatherFiles();
             const workflow_steps = gatherSteps();
             const code_snippets = gatherSnippets();
@@ -977,7 +1133,7 @@
             const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
             const category = categoryElement && categoryElement.textContent !== 'None' ? categoryElement.textContent : 'Feature';
             
-            let markdown = `# Task Prototype: ${title}\n\n- **Category:** ${category}\n\n`;
+            let markdown = `# Task Develop: ${title}\n\n- **Category:** ${category}\n\n`;
             
             markdown += `## Architecture Tree\n`;
             if (file_tree.length > 0) {
@@ -1010,8 +1166,8 @@
             return markdown;
         }
 
-        function copyPrototypeMarkdown() {
-            const markdown = generatePrototypeMarkdownText();
+        function copyDevelopMarkdown() {
+            const markdown = generateDevelopMarkdownText();
             const btn = document.getElementById('btn-copy-proto');
             navigator.clipboard.writeText(markdown).then(() => {
                 const originalText = btn.textContent;
@@ -1021,12 +1177,12 @@
             });
         }
 
-        function exportPrototypeMarkdown() {
-            const md = generatePrototypeMarkdownText();
+        function exportDevelopMarkdown() {
+            const md = generateDevelopMarkdownText();
             const titleElement = document.getElementById('metaTitle');
             const title = titleElement && titleElement.textContent !== 'None' ? titleElement.textContent : 'Task';
             const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
-            const filename = `${safeTitle}_prototype.md`;
+            const filename = `${safeTitle}_develop.md`;
             
             const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -1087,11 +1243,11 @@
                 const data = await res.json();
                 const pre = document.getElementById('globalDebug');
                 if (data.status === 'success' && pre) {
-                    if (data.logs) {
-                        pre.textContent = data.logs;
-                    } else {
-                        const dict = i18n[localStorage.getItem('app_lang') || 'en'];
-                        pre.textContent = dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
+                    const dict = (typeof i18n !== 'undefined') ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
+                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
+                    if (pre.textContent !== newText) {
+                        pre.textContent = newText;
+                        pre.scrollTop = pre.scrollHeight;
                     }
                 }
             } catch (e) {}
@@ -1327,12 +1483,12 @@
                             verifyContainer.appendChild(item);
                         });
                         
-                    } else if (state.prototype_data && state.prototype_data.workflow_steps && state.prototype_data.workflow_steps.length > 0) {
+                    } else if (state.develop_data && state.develop_data.workflow_steps && state.develop_data.workflow_steps.length > 0) {
                         // Render Main Editor View
                         document.getElementById('view-main').style.display = 'grid';
                         
                         // Render File tree structured items
-                        const files = state.prototype_data.file_tree || [];
+                        const files = state.develop_data.file_tree || [];
                         const fContainer = document.getElementById('filesContainer');
                         fContainer.innerHTML = '';
                         if (files.length > 0) {
@@ -1342,7 +1498,7 @@
                         }
                         
                         // Render Workflow steps structured items
-                        const steps = state.prototype_data.workflow_steps || [];
+                        const steps = state.develop_data.workflow_steps || [];
                         const sContainer = document.getElementById('stepsContainer');
                         sContainer.innerHTML = '';
                         if (steps.length > 0) {
@@ -1352,7 +1508,7 @@
                         }
                         
                         // Render Code Snippets dynamic cards
-                        const snippets = state.prototype_data.code_snippets || [];
+                        const snippets = state.develop_data.code_snippets || [];
                         const snContainer = document.getElementById('snippetsContainer');
                         snContainer.innerHTML = '';
                         snippets.forEach(s => addSnippetCard(s.filename, s.language, s.code));
@@ -1360,7 +1516,7 @@
                         // Render open questions
                         const qContainer = document.getElementById('questionsContainer');
                         qContainer.innerHTML = '';
-                        const questions = state.prototype_data.open_questions || [];
+                        const questions = state.develop_data.open_questions || [];
                         if (questions.length > 0) {
                             questions.forEach((q, idx) => {
                                 const qCard = document.createElement('div');
@@ -1420,7 +1576,7 @@
             const modelSelect = document.getElementById('globalModelSelect');
             
             const payload = {
-                command: 'task-prototype',
+                command: 'task-develop',
                 data: {
                     is_update: isUpdate,
                     file_tree: file_tree,
@@ -1434,7 +1590,7 @@
                 }
             };
 
-            logDebug(`Sending 'task-prototype' request (is_update=${isUpdate}) using model ${payload.data.model}...`);
+            logDebug(`Sending 'task-develop' request (is_update=${isUpdate}) using model ${payload.data.model}...`);
 
             try {
                 const res = await fetch('/api/agent', {
@@ -1444,16 +1600,16 @@
                 });
                 const result = await res.json();
                 if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-prototype):\n` + result.response);
+                    logDebug(`SUCCESS (task-develop):\n` + result.response);
                     logDebug(`Reloading page in 1.2 seconds to view updated solution...`);
                     setTimeout(() => {
                         window.location.reload();
                     }, 1200);
                 } else {
-                    logDebug(`ERROR (task-prototype):\n` + (result.message || 'Unknown error'));
+                    logDebug(`ERROR (task-develop):\n` + (result.message || 'Unknown error'));
                 }
             } catch (err) {
-                logDebug(`NETWORK ERROR (task-prototype):\n` + err.message);
+                logDebug(`NETWORK ERROR (task-develop):\n` + err.message);
             } finally {
                 setLoading(false, btnId);
             }
@@ -1469,9 +1625,9 @@
                 const data = await stateRes.json();
                 if (data.status === 'success') {
                     const state = data.state;
-                    state.prototype_data.file_tree = file_tree;
-                    state.prototype_data.workflow_steps = workflow_steps;
-                    state.prototype_data.code_snippets = code_snippets;
+                    state.develop_data.file_tree = file_tree;
+                    state.develop_data.workflow_steps = workflow_steps;
+                    state.develop_data.code_snippets = code_snippets;
                     
                     const title = state.create_data && state.create_data.title ? state.create_data.title : 'Task';
                     const safeTitle = title.replace(/[^a-zA-Z0-9_\u4e00-\u9fa5]/g, '_').replace(/_+/g, '_').substring(0, 50);
@@ -1526,7 +1682,7 @@
                     if (result.status === 'success') {
                         logDebug("SUCCESS: State imported. Reloading page...");
                         setTimeout(() => {
-                            const newStage = importData.state.current_stage || 'prototype';
+                            const newStage = importData.state.current_stage || 'develop';
                             if (newStage === 'spec') {
                                 window.location.href = '/spec';
                             } else if (newStage === 'create' || newStage === 'completed') {
@@ -1545,5 +1701,17 @@
             reader.readAsText(file);
         }
     </script>
+    <script src="/sessions.js"></script>
+
+    <!-- Floating Debug Console -->
+    <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>
+    <div class="debug-console" id="debugConsole">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+            <label style="margin:0; font-family:var(--mono); font-size:0.8125rem; color:var(--gray-800); font-weight:600;" data-i18n="consoleTitle">System Console & AI Output</label>
+            <div id="debug-status" style="font-family:var(--mono); font-size:0.8rem; color:var(--gray-500);">Live</div>
+        </div>
+        <pre id="globalDebug" class="debug-pre" style="flex:1;">Ready. Waiting for user interaction...</pre>
+    </div>
+
 </body>
 </html>

@@ -1,5 +1,5 @@
 WORKFLOW_STATE = {
-    "current_stage": "create", # "create", "spec", "prototype", "testing", "completed"
+    "current_stage": "create", # "create", "spec", "develop", "testing", "completed"
     "create_data": {
         "title": "",
         "category": "Feature",
@@ -10,7 +10,7 @@ WORKFLOW_STATE = {
         "sections": [],      # [{ "title": "...", "items": [...] }]
         "open_questions": [] # [ "question 1", "question 2" ]
     },
-    "prototype_data": {
+    "develop_data": {
         "workflow_steps": [], # [ "step 1", "step 2" ]
         "file_tree": [],      # [{ "path": "...", "status": "new" }]
         "code_snippets": [],  # [{ "filename": "...", "language": "...", "code": "..." }]
