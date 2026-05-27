@@ -624,6 +624,12 @@
             grid-template-columns: 75% 25%;
             transition: grid-template-columns 0.3s ease;
         }
+        .content-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
         .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
         .main-panel > .card { flex: 1; overflow-y: auto; }
         .side-panel { 
@@ -829,6 +835,27 @@
 
         <!-- Main Develop Grid -->
         <div id="view-main" class="content-grid" style="display:none;">
+            <!-- Top Column (100% width): Context Summary -->
+            <div class="card" style="grid-column: 1 / -1; padding: 1.5rem; margin-bottom: 0rem;">
+                <div class="eyebrow" data-i18n="eyebrowMeta">Context Summary</div>
+                <div class="metadata-box" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div style="display: flex; gap: 2rem;">
+                        <div>
+                            <strong data-i18n="lblMetaTitle" style="margin-right: 0.5rem;">Title:</strong>
+                            <span id="metaTitle">None</span>
+                        </div>
+                        <div>
+                            <strong data-i18n="lblMetaCategory" style="margin-right: 0.5rem;">Category:</strong>
+                            <span id="metaCategory">None</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.25rem;">
+                        <strong data-i18n="lblMetaGoal" style="display: block; margin-bottom: 0.25rem;">Goal</strong>
+                        <div id="metaGoal" class="rendered-markdown">None</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Left Column: Visual Structured List Editors -->
             <div>
                 <!-- File tree list editor -->
@@ -873,24 +900,6 @@
 
             <!-- Right Column: Metadata, References, Answering Questions & Actions -->
             <div>
-                <div class="card" style="padding: 1.5rem;">
-                    <div class="eyebrow" data-i18n="eyebrowMeta">Context Summary</div>
-                    <div class="metadata-box">
-                        <div>
-                            <strong data-i18n="lblMetaTitle">Title</strong>
-                            <span id="metaTitle">None</span>
-                        </div>
-                        <div>
-                            <strong data-i18n="lblMetaCategory">Category</strong>
-                            <span id="metaCategory">None</span>
-                        </div>
-                        <div style="margin-top: 1rem;">
-                            <strong data-i18n="lblMetaGoal">Goal</strong>
-                            <div id="metaGoal" class="rendered-markdown">None</div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- References Panel Card -->
                 <div class="card" style="padding: 1.5rem;">
                     <div class="eyebrow" data-i18n="eyebrowReferences">Reference Materials</div>
@@ -1205,37 +1214,8 @@
             }
         }
 
-        async function fetchDebugLogs() {
-            try {
-                const res = await fetch('/api/debug');
-                const data = await res.json();
-                const pre = document.getElementById('globalDebug');
-                if (data.status === 'success' && pre) {
-                    const dict = (typeof i18n !== 'undefined') ? i18n[localStorage.getItem('app_lang') || 'en'] : {};
-                    const newText = data.logs || dict['consoleReady'] || 'Ready. Waiting for user interaction...\n';
-                    if (pre.textContent !== newText) {
-                        pre.textContent = newText;
-                        pre.scrollTop = pre.scrollHeight;
-                    }
-                }
-            } catch (e) {}
-        }
-
-        async function logDebug(message) {
-            try {
-                await fetch('/api/debug', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: message})
-                });
-                await fetchDebugLogs();
-            } catch (e) {
-                const pre = document.getElementById('globalDebug');
-                if (pre) {
-                    pre.textContent = `[${new Date().toLocaleTimeString()}] ${message}\n\n` + pre.textContent;
-                }
-            }
-        }
+        async function fetchDebugLogs() { /* replaced by ocLogDebug */ }
+        function logDebug(message) { ocLogDebug(message); }
 
         function setLoading(isLoading, btnId) {
             const indicator = document.getElementById('loading-indicator');
@@ -1355,6 +1335,16 @@
                 }
             });
             return list;
+        }
+
+        function gatherOpenQuestions() {
+            const questionsObj = {};
+            document.querySelectorAll('.question-answer-input').forEach(textarea => {
+                const q = decodeURIComponent(textarea.getAttribute('data-question'));
+                const a = textarea.value;
+                questionsObj[q] = a;
+            });
+            return questionsObj;
         }
 
         function toggleCollapse(card) {
@@ -1484,13 +1474,25 @@
                         // Render open questions
                         const qContainer = document.getElementById('questionsContainer');
                         qContainer.innerHTML = '';
-                        const questions = state.develop_data.open_questions || [];
-                        if (questions.length > 0) {
-                            questions.forEach((q, idx) => {
+                        const questions = state.develop_data.open_questions || {};
+                        let questionsObj = {};
+                        if (Array.isArray(questions)) {
+                            questions.forEach(q => {
+                                questionsObj[q] = "";
+                            });
+                        } else if (questions && typeof questions === 'object') {
+                            questionsObj = questions;
+                        }
+
+                        const entries = Object.entries(questionsObj);
+                        if (entries.length > 0) {
+                            entries.forEach(([q, a], idx) => {
                                 const qCard = document.createElement('div');
                                 qCard.className = 'question-card';
+                                qCard.style.marginBottom = '1.25rem';
                                 qCard.innerHTML = `
-                                    <div class="question-label">[Question / 問題 ${idx + 1}] ${q}</div>
+                                    <div class="question-label" style="font-weight: 600; margin-bottom: 0.25rem;">[Question / 問題 ${idx + 1}] ${q}</div>
+                                    <textarea class="question-answer-input" data-question="${encodeURIComponent(q)}" rows="2" style="width: 100%; border: 1px solid var(--gray-200); border-radius: 6px; padding: 0.5rem; font-family: inherit; font-size: 0.875rem; resize: vertical;" placeholder="Type your answer here... / 請在此輸入您的回答...">${a || ''}</textarea>
                                 `;
                                 qContainer.appendChild(qCard);
                             });
@@ -1522,88 +1524,14 @@
         }
 
         async function refreshModelSelect() {
-            try {
-                const res = await fetch('/api/models');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    const select = document.getElementById('globalModelSelect');
-                    if (!select) return;
-                    const current = select.value;
-                    select.innerHTML = '';
-                    const defaultModel = data.default_model || 'gemini-3.1-flash-lite';
-                    data.models.forEach(model => {
-                        const option = document.createElement('option');
-                        option.value = model;
-                        let provider = 'vllm';
-                        if (model.toLowerCase().includes('gemini')) provider = 'google';
-                        else if (model.toLowerCase().includes('claude')) provider = 'anthropic';
-                        option.textContent = `${provider} - ${model}`;
-                        if (model === defaultModel) option.selected = true;
-                        select.appendChild(option);
-                    });
-                    if (current && data.models.includes(current)) {
-                        select.value = current;
-                    }
-                }
-            } catch (err) {
-                console.error('Could not load models', err);
-            }
+            const select = document.getElementById('globalModelSelect');
+            if (select) select.style.display = 'none';
         }
-
         async function loadAgentConfig() {
-            try {
-                const res = await fetch('/api/agent-config');
-                const data = await res.json();
-                if (data.status === 'success') {
-                    document.getElementById('geminiApiKey').value = data.config.GEMINI_API_KEY || '';
-                    document.getElementById('anthropicApiKey').value = data.config.ANTHROPIC_API_KEY || '';
-                    document.getElementById('vllmApiUrl').value = data.config.VLLM_API_URL || '';
-                    document.getElementById('vllmDefaultModel').value = data.config.VLLM_DEFAULT_MODEL || 'devstral';
-
-                    const backendStatus = [];
-                    if (data.available_backends.gemini) backendStatus.push('Gemini: configured');
-                    else backendStatus.push('Gemini: not configured');
-                    if (data.available_backends.anthropic) backendStatus.push('Anthropic: configured');
-                    else backendStatus.push('Anthropic: not configured');
-                    if (data.available_backends.vllm) backendStatus.push('VLLM: configured');
-                    else backendStatus.push('VLLM: not configured');
-                    document.getElementById('backendStatus').textContent = backendStatus.join(' · ');
-                }
-            } catch (err) {
-                console.error('Could not load agent config', err);
-                setAgentConfigFeedback('Failed to load agent configuration.', true);
-            }
+            const backendStatus = document.getElementById('backendStatus');
+            if (backendStatus) backendStatus.textContent = 'OpenCode server at 127.0.0.1:4096';
         }
-
-        async function saveAgentConfig() {
-            const payload = {
-                config: {
-                    GEMINI_API_KEY: document.getElementById('geminiApiKey').value.trim(),
-                    ANTHROPIC_API_KEY: document.getElementById('anthropicApiKey').value.trim(),
-                    VLLM_API_URL: document.getElementById('vllmApiUrl').value.trim(),
-                    VLLM_DEFAULT_MODEL: document.getElementById('vllmDefaultModel').value.trim() || 'devstral'
-                }
-            };
-
-            try {
-                const res = await fetch('/api/agent-config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    setAgentConfigFeedback('Agent settings saved successfully.');
-                    await loadAgentConfig();
-                    await refreshModelSelect();
-                } else {
-                    setAgentConfigFeedback(result.message || 'Failed to save agent settings.', true);
-                }
-            } catch (err) {
-                setAgentConfigFeedback('Failed to save agent settings.', true);
-                console.error('saveAgentConfig error', err);
-            }
-        }
+        async function saveAgentConfig() { closeAgentConfigModal(); }
 
         function openAgentConfigModal() {
             const modal = document.getElementById('agentConfigModal');
@@ -1621,49 +1549,53 @@
             const btnId = isUpdate ? 'btn-update-proto' : 'btn-finalize';
             setLoading(true, btnId);
 
-            const file_tree = gatherFiles();
+            const file_tree      = gatherFiles();
             const workflow_steps = gatherSteps();
-            const code_snippets = gatherSnippets();
-            const feedback_input = document.getElementById('feedbackInput').value;
-            const workspace_path = document.getElementById('workspacePath') ? document.getElementById('workspacePath').value.trim() : './';
-            localStorage.setItem('workspace_path', workspace_path);
-            const modelSelect = document.getElementById('globalModelSelect');
-            
-            const payload = {
-                command: 'task-develop',
-                data: {
-                    is_update: isUpdate,
-                    file_tree: file_tree,
-                    workflow_steps: workflow_steps,
-                    code_snippets: code_snippets,
-                    feedback_input: feedback_input,
-                    workspace_path: workspace_path,
-                    references: activeReferences,
-                    language: localStorage.getItem('app_lang') || 'en',
-                    model: modelSelect ? modelSelect.value : 'gemini-3.1-flash-lite'
-                }
-            };
+            const code_snippets  = gatherSnippets();
+            const open_questions = gatherOpenQuestions();
+            const rawFeedback    = document.getElementById('feedbackInput').value;
+            const lang = localStorage.getItem('app_lang') || 'en';
 
-            logDebug(`Sending 'task-develop' request (is_update=${isUpdate}) using model ${payload.data.model}...`);
+            let answersText = "";
+            Object.entries(open_questions).forEach(([q, a], idx) => {
+                if (a.trim()) {
+                    answersText += `- Question ${idx + 1}: "${q}"\n  Answer: "${a.trim()}"\n`;
+                }
+            });
+            const feedbackInput = answersText
+                ? `[User Answers to Open Questions]\n${answersText}\n[Additional Scoping/Feedback]\n${rawFeedback}`
+                : rawFeedback;
+
+            logDebug(`Sending develop request (isUpdate=${isUpdate}) via OpenCode...`);
 
             try {
-                const res = await fetch('/api/agent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                const sessionId = await ocGetOrCreateSessionId();
+                const prompt = isUpdate
+                    ? ocBuildDevelopUpdatePrompt(workflow_steps, file_tree, code_snippets, feedbackInput, lang)
+                    : ocBuildDevelopFinalizePrompt(workflow_steps, file_tree, code_snippets, feedbackInput, lang);
+
+                await ocSendPrompt(sessionId, prompt);
+                await ocSaveState({ develop_data: { workflow_steps, file_tree, code_snippets, open_questions } });
+
+                const expectedEvent = isUpdate ? 'task_develop_update' : 'task_develop_finalize';
+                const result = await ocPollForCompletion(sessionId, expectedEvent, (chunk) => {
+                    const pre = document.getElementById('globalDebug');
+                    if (pre) pre.textContent = chunk.slice(0, 2000);
                 });
-                const result = await res.json();
-                if (result.status === 'success') {
-                    logDebug(`SUCCESS (task-develop):\n` + result.response);
-                    logDebug(`Reloading page in 1.2 seconds to view updated solution...`);
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1200);
+
+                if (isUpdate && result?.develop) {
+                    await ocSaveState({ develop_data: result.develop });
+                    logDebug('Prototype updated. Reloading...');
+                    setTimeout(() => window.location.reload(), 800);
+                } else if (!isUpdate && result?.completed) {
+                    await ocSaveState({ completed_data: result.completed, current_stage: 'completed' });
+                    logDebug('Implementation complete. Reloading...');
+                    setTimeout(() => window.location.reload(), 800);
                 } else {
-                    logDebug(`ERROR (task-develop):\n` + (result.message || 'Unknown error'));
+                    logDebug('Unexpected response: ' + JSON.stringify(result).slice(0, 200));
                 }
             } catch (err) {
-                logDebug(`NETWORK ERROR (task-develop):\n` + err.message);
+                logDebug('ERROR (task-develop): ' + err.message);
             } finally {
                 setLoading(false, btnId);
             }
@@ -1958,7 +1890,6 @@
         }
         async function sendAgentMessage() {
             const input = document.getElementById('agentInput');
-            const modelSelect = document.getElementById('globalModelSelect');
             if (!input) return;
             const msg = input.value.trim();
             if (!msg) return;
@@ -1966,12 +1897,12 @@
             input.value = '';
             try {
                 setLoading(true, null);
-                const payload = { command: 'chat', data: { messages: [{ role: 'user', content: msg }], model: modelSelect ? modelSelect.value : undefined } };
-                const res  = await fetch('/api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                const data = await res.json();
-                if (data.error)         appendAgentOutput('Error: ' + data.error);
-                else if (data.response) appendAgentOutput(data.response);
-                else                    appendAgentOutput(JSON.stringify(data));
+                const sessionId = await ocGetOrCreateSessionId();
+                const lang = localStorage.getItem('app_lang') || 'en';
+                const prompt = ocBuildChatPrompt(msg, lang);
+                await ocSendPrompt(sessionId, prompt);
+                const result = await ocPollForCompletion(sessionId, 'chat', null);
+                appendAgentOutput(result?.chat || JSON.stringify(result, null, 2));
             } catch (e) {
                 appendAgentOutput('Error: ' + e.message);
             } finally {
@@ -1979,7 +1910,10 @@
             }
         }
     </script>
+    <script src="/opencode_client.js"></script>
     <script src="/sessions.js"></script>
+    <script src="/terminal_input.js"></script>
+    <script src="/keyboard_shortcuts.js"></script>
 
     <!-- Floating Debug Console -->
     <button class="debug-toggle-btn" onclick="toggleDebugConsole()" style="width: 150px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1001; background-color: var(--slate); color: var(--ivory); border: none; border-radius: 999px; padding: 0.5rem 1rem; font-family: var(--mono); font-size: 0.8125rem; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); text-align: center;">Toggle Debug</button>
