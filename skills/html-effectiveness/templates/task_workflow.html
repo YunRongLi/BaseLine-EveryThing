@@ -296,14 +296,18 @@
     /* Layout and modal styles */
         .layout-grid { 
             width: 100%; 
-            height: calc(100vh - 120px);
-            align-items: stretch;
+            align-items: start;
             grid-template-columns: 75% 25%;
             transition: grid-template-columns 0.3s ease;
         }
         .main-panel { width: 100%; height: 100%; display: flex; flex-direction: column; }
-        .main-panel > .card { flex: 1; overflow-y: auto; }
+        .main-panel > .card { flex: 1; }
         .side-panel { 
+            position: sticky;
+            top: 2rem;
+            max-height: calc(100vh - 4rem);
+            display: flex;
+            flex-direction: column;
             min-height: 240px; 
             width:100%; 
             transition: all 0.3s ease;
