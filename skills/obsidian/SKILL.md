@@ -142,7 +142,7 @@ MOCs serve as curated map notes that index, group, and contextualize links to ot
 
 ## 7. AI-Agent PKM and Google Antigravity Workflows
 
-Google Antigravity interfaces directly with the local Obsidian vault via native file system access and STDIO channels. To maximize AI coordination and efficiency, follow these guidelines:
+Google Antigravity interfaces directly with the local Obsidian vault via `obsidian-cli`. To maximize AI coordination and efficiency, follow these guidelines:
 
 ### 7.1. MOC-First AI Context
 MOCs are the ultimate structure for AI-agent compatibility. Because an MOC indexes an entire subject area, the AI agent can open a single MOC note to instantly comprehend the context and structure of your thoughts, rather than wasting tokens traversing separate files.
