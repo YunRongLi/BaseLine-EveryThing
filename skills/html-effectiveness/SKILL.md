@@ -10,7 +10,7 @@ When presenting spatial information, timelines, comparisons, visual designs, or 
 ## 1. Rules
 - **Zero Build Step:** Use inline CSS and vanilla JavaScript only. Do not use external frameworks or build steps.
 - **Actionable & Navigable:** Layouts must use Flexbox or CSS Grid for side-by-side comparisons to avoid long linear scrolling.
-- **Functionality First:** Beautiful UI is NOT the primary goal. Prioritize clear, functional layouts and robust logic over aesthetic polish.
+- **Functionality & Aesthetic Polish:** While prioritizing clear, functional layouts and robust interactive logic, ensure the UI maintains modern, premium visual standards (clean alignment, elegant typography, subtle hover transitions, and visual balance) rather than simple text grids.
 - **Deep Interactivity:** Treat the HTML as a functional application. For example, if designing a test case, build an interface that allows the user to add, modify, or remove test steps directly within the browser, and export the results.
 - **Dialogs & Scaffolding:** If any dialog item, modal window, or form will help the user to better design or define their work, it is highly encouraged to use them.
 - **No Fabricated Data:** Do not invent runtime data or screenshots.
@@ -63,7 +63,7 @@ Apply this skill whenever the user requests or the task naturally fits one of th
 ## 4. Execution
 1. Think about the structure and interactive capabilities of the HTML artifact before writing code.
 2. Use the `write_to_file` tool to save the `.html` file.
-3. Use the `run_command` tool to run the custom HTTP server script located at the skill's install path (e.g., `~/.gemini/skills/html-effectiveness/scripts/serve_html.py` for shared installs, `~/.agents/skills/html-effectiveness/scripts/serve_html.py` for workspace installs, `~/.gemini/antigravity/skills/html-effectiveness/scripts/serve_html.py` for legacy global installs, or `~/.gemini/antigravity-cli/skills/html-effectiveness/scripts/serve_html.py` for CLI global installs). Send it to the background (e.g., `...serve_html.py . &> /dev/null &`) or use appropriate timeouts so it doesn't block. Wait a short duration (e.g. 1000ms) to capture the printed port before making the command async.
+3. Use the `run_command` tool to run the custom HTTP server script located at the skill's install path (e.g., `~/.gemini/skills/html-effectiveness/scripts/serve_html.py` for shared installs, `~/.agents/skills/html-effectiveness/scripts/serve_html.py` for workspace installs, `~/.gemini/antigravity/skills/html-effectiveness/scripts/serve_html.py` for legacy global installs, or `~/.gemini/antigravity-cli/skills/html-effectiveness/scripts/serve_html.py` for CLI global installs). Send it to the background by redirecting its output to a server log file in the workflow state directory (e.g., `...serve_html.py . > .workflow/server.log 2>&1 &`). Do not redirect directly to /dev/null as that prevents capturing the port. Read the generated port from the printed output or the log file.
 4. The script will output the port it chose (e.g., `Server started at http://localhost:43218`). Provide the user with the localhost URL (e.g., `http://localhost:<port>/filename.html`) so they can access it via their browser. Do not output the entire HTML code in your chat response.
 
 ## 5. Special Commands

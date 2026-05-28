@@ -13,6 +13,7 @@ import json
 import urllib.request
 import urllib.error
 import urllib.parse
+import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 # OpenCode server runs on a fixed address with no authentication required.
@@ -41,23 +42,27 @@ _DEFAULT_STATE = {
 # State helpers
 # ---------------------------------------------------------------------------
 
+_state_lock = threading.Lock()
+
 def _load_state():
-    if os.path.exists(_STATE_FILE):
-        try:
-            with open(_STATE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return dict(_DEFAULT_STATE)
+    with _state_lock:
+        if os.path.exists(_STATE_FILE):
+            try:
+                with open(_STATE_FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return dict(_DEFAULT_STATE)
 
 
 def _save_state(state):
-    try:
-        os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
-        with open(_STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-    except Exception as exc:
-        print(f"[serve_html] State save error: {exc}", file=sys.stderr)
+    with _state_lock:
+        try:
+            os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
+            with open(_STATE_FILE, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            print(f"[serve_html] State save error: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +176,34 @@ class SkillHTTPHandler(SimpleHTTPRequestHandler):
             self._send_json({"status": "error", "message": f"Unknown route: {clean}"}, code=404)
 
     # ------------------------------------------------------------------
+    # PUT
+    # ------------------------------------------------------------------
+
+    def do_PUT(self):
+        parsed = urllib.parse.urlparse(self.path)
+        clean = parsed.path.lstrip("/")
+        body = self._read_body()
+
+        if clean.startswith("api/opencode/"):
+            self._proxy("PUT", parsed, body)
+        else:
+            self._send_json({"status": "error", "message": f"Unknown route: {clean}"}, code=404)
+
+    # ------------------------------------------------------------------
+    # PATCH
+    # ------------------------------------------------------------------
+
+    def do_PATCH(self):
+        parsed = urllib.parse.urlparse(self.path)
+        clean = parsed.path.lstrip("/")
+        body = self._read_body()
+
+        if clean.startswith("api/opencode/"):
+            self._proxy("PATCH", parsed, body)
+        else:
+            self._send_json({"status": "error", "message": f"Unknown route: {clean}"}, code=404)
+
+    # ------------------------------------------------------------------
     # CORS pre-flight
     # ------------------------------------------------------------------
 
@@ -216,6 +249,11 @@ class SkillHTTPHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(err_body)
+        except urllib.error.URLError as exc:
+            self._send_json({
+                "status": "error",
+                "message": f"Cannot connect to OpenCode backend server: {exc.reason}. Verify that OpenCode is running on port 4096."
+            }, code=503)
         except Exception as exc:
             self._send_json({"status": "error", "message": f"Proxy error: {exc}"}, code=502)
 

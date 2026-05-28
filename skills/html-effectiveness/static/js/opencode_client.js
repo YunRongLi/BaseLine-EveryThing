@@ -104,7 +104,7 @@ async function ocGetMessages(sessionId) {
 
 /**
  * Extract the last JSON block from a message text.
- * Handles ```json ... ``` and bare { ... } patterns.
+ * Handles ```json ... ``` and bare { ... } patterns using a robust brace-balancing parser.
  */
 function ocExtractJson(text) {
     if (!text) return null;
@@ -121,11 +121,29 @@ function ocExtractJson(text) {
         try { return JSON.parse(bare[1]); } catch (_) {}
     }
 
-    // Try first { ... } span
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start !== -1 && end > start) {
-        try { return JSON.parse(text.slice(start, end + 1)); } catch (_) {}
+    // Balance-tracking brace matching to safely locate the valid JSON block
+    let braceCount = 0;
+    let startIdx = -1;
+
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === '{') {
+            if (braceCount === 0) {
+                startIdx = i;
+            }
+            braceCount++;
+        } else if (text[i] === '}') {
+            if (braceCount > 0) {
+                braceCount--;
+                if (braceCount === 0 && startIdx !== -1) {
+                    const candidate = text.slice(startIdx, i + 1);
+                    try {
+                        return JSON.parse(candidate);
+                    } catch (_) {
+                        // Continue searching if this wasn't a valid JSON block
+                    }
+                }
+            }
+        }
     }
 
     return null;
