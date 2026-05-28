@@ -75,12 +75,24 @@ else
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             TARGET_WORKFLOWS="$BASE_DIR/workflows"
+            DIRECT_GLOBAL_RULES="$HOME/.gemini/antigravity-cli/rules"
+            DIRECT_GLOBAL_SKILLS="$HOME/.gemini/antigravity-cli/skills"
+            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/antigravity-cli/workflows"
+            SHARED_RULES="$HOME/.gemini/rules"
+            SHARED_SKILLS="$HOME/.gemini/skills"
+            SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
         antigravity-ide)
             BASE_DIR="$HOME/.gemini/antigravity-ide/plugins/$PLUGIN_NAME"
             TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             TARGET_WORKFLOWS="$BASE_DIR/workflows"
+            DIRECT_GLOBAL_RULES="$HOME/.gemini/antigravity-ide/rules"
+            DIRECT_GLOBAL_SKILLS="$HOME/.gemini/antigravity-ide/skills"
+            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/antigravity-ide/workflows"
+            SHARED_RULES="$HOME/.gemini/rules"
+            SHARED_SKILLS="$HOME/.gemini/skills"
+            SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
         copilot)
             BASE_DIR="$HOME/.copilot"
@@ -107,6 +119,13 @@ if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = 
     mkdir -p "$LEGACY_RULES"
     mkdir -p "$LEGACY_SKILLS"
     mkdir -p "$LEGACY_WORKFLOWS"
+elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+    mkdir -p "$SHARED_RULES" 2>/dev/null || true
+    mkdir -p "$SHARED_SKILLS" 2>/dev/null || true
+    mkdir -p "$SHARED_WORKFLOWS" 2>/dev/null || true
+    mkdir -p "$DIRECT_GLOBAL_RULES" 2>/dev/null || true
+    mkdir -p "$DIRECT_GLOBAL_SKILLS" 2>/dev/null || true
+    mkdir -p "$DIRECT_GLOBAL_WORKFLOWS" 2>/dev/null || true
 fi
 
 # Install Rules
@@ -140,6 +159,9 @@ if [ -d "rules" ]; then
             cp "$rule_file" "$TARGET_RULES/" 2>/dev/null || true
             if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
                 cp "$rule_file" "$LEGACY_RULES/" 2>/dev/null || true
+            elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+                cp "$rule_file" "$SHARED_RULES/" 2>/dev/null || true
+                cp "$rule_file" "$DIRECT_GLOBAL_RULES/" 2>/dev/null || true
             fi
         fi
     done
@@ -155,6 +177,9 @@ if [ -d "skills" ]; then
     cp -r skills/* "$TARGET_SKILLS/" 2>/dev/null || true
     if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
         cp -r skills/* "$LEGACY_SKILLS/" 2>/dev/null || true
+    elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+        cp -r skills/* "$SHARED_SKILLS/" 2>/dev/null || true
+        cp -r skills/* "$DIRECT_GLOBAL_SKILLS/" 2>/dev/null || true
     fi
     echo "[OK] Skills installed."
 else
@@ -167,6 +192,9 @@ if [ -d "workflows" ]; then
     cp -r workflows/* "$TARGET_WORKFLOWS/" 2>/dev/null || true
     if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
         cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
+    elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+        cp -r workflows/* "$SHARED_WORKFLOWS/" 2>/dev/null || true
+        cp -r workflows/* "$DIRECT_GLOBAL_WORKFLOWS/" 2>/dev/null || true
     fi
     echo "[OK] Workflows installed."
 else

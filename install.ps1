@@ -84,12 +84,24 @@ if ($Scope -eq "workspace") {
             $TargetRules = Join-Path $BaseDir "rules"
             $TargetSkills = Join-Path $BaseDir "skills"
             $TargetWorkflows = Join-Path $BaseDir "workflows"
+            $DirectGlobalRules = Join-Path $HOME ".gemini\antigravity-cli\rules"
+            $DirectGlobalSkills = Join-Path $HOME ".gemini\antigravity-cli\skills"
+            $DirectGlobalWorkflows = Join-Path $HOME ".gemini\antigravity-cli\workflows"
+            $SharedRules = Join-Path $HOME ".gemini\rules"
+            $SharedSkills = Join-Path $HOME ".gemini\skills"
+            $SharedWorkflows = Join-Path $HOME ".gemini\workflows"
         }
         "antigravity-ide" {
             $BaseDir = Join-Path $HOME ".gemini\antigravity-ide\plugins\$PluginName"
             $TargetRules = Join-Path $BaseDir "rules"
             $TargetSkills = Join-Path $BaseDir "skills"
             $TargetWorkflows = Join-Path $BaseDir "workflows"
+            $DirectGlobalRules = Join-Path $HOME ".gemini\antigravity-ide\rules"
+            $DirectGlobalSkills = Join-Path $HOME ".gemini\antigravity-ide\skills"
+            $DirectGlobalWorkflows = Join-Path $HOME ".gemini\antigravity-ide\workflows"
+            $SharedRules = Join-Path $HOME ".gemini\rules"
+            $SharedSkills = Join-Path $HOME ".gemini\skills"
+            $SharedWorkflows = Join-Path $HOME ".gemini\workflows"
         }
         "copilot" {
             $BaseDir = Join-Path $HOME ".copilot"
@@ -130,6 +142,12 @@ if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigr
     if (-not (Test-Path $LegacyWorkflowsDir)) {
         New-Item -ItemType Directory -Path $LegacyWorkflowsDir -Force | Out-Null
     }
+} elseif ($Scope -eq "global" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
+    foreach ($Dir in @($SharedRules, $SharedSkills, $SharedWorkflows, $DirectGlobalRules, $DirectGlobalSkills, $DirectGlobalWorkflows)) {
+        if (-not (Test-Path $Dir)) {
+            New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+        }
+    }
 }
 
 # Install Rules
@@ -148,6 +166,9 @@ if (Test-Path "rules") {
         Copy-Item -Path $_.FullName -Destination $TargetRules -Force -ErrorAction SilentlyContinue
         if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
             Copy-Item -Path $_.FullName -Destination $LegacyRulesDir -Force -ErrorAction SilentlyContinue
+        } elseif ($Scope -eq "global" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
+            Copy-Item -Path $_.FullName -Destination $SharedRules -Force -ErrorAction SilentlyContinue
+            Copy-Item -Path $_.FullName -Destination $DirectGlobalRules -Force -ErrorAction SilentlyContinue
         }
     }
     Write-Host "[OK] Rules installed." -ForegroundColor Green
@@ -161,6 +182,9 @@ if (Test-Path "skills") {
     Copy-Item -Path "skills\*" -Destination $TargetSkills -Recurse -Force -ErrorAction SilentlyContinue
     if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
         Copy-Item -Path "skills\*" -Destination $LegacySkillsDir -Recurse -Force -ErrorAction SilentlyContinue
+    } elseif ($Scope -eq "global" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
+        Copy-Item -Path "skills\*" -Destination $SharedSkills -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path "skills\*" -Destination $DirectGlobalSkills -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "[OK] Skills installed." -ForegroundColor Green
 } else {
@@ -173,6 +197,9 @@ if (Test-Path "workflows") {
     Copy-Item -Path "workflows\*" -Destination $TargetWorkflows -Recurse -Force -ErrorAction SilentlyContinue
     if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
         Copy-Item -Path "workflows\*" -Destination $LegacyWorkflowsDir -Recurse -Force -ErrorAction SilentlyContinue
+    } elseif ($Scope -eq "global" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
+        Copy-Item -Path "workflows\*" -Destination $SharedWorkflows -Recurse -Force -ErrorAction SilentlyContinue
+        Copy-Item -Path "workflows\*" -Destination $DirectGlobalWorkflows -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "[OK] Workflows installed." -ForegroundColor Green
 } else {

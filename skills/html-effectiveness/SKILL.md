@@ -63,7 +63,7 @@ Apply this skill whenever the user requests or the task naturally fits one of th
 ## 4. Execution
 1. Think about the structure and interactive capabilities of the HTML artifact before writing code.
 2. Use the `write_to_file` tool to save the `.html` file.
-3. Use the `run_command` tool to run the custom HTTP server script: `~/.gemini/antigravity/skills/html-effectiveness/scripts/serve_html.py <directory_of_html_file>`. Send it to the background (e.g., `...serve_html.py . &> /dev/null &`) or use appropriate timeouts so it doesn't block. Wait a short duration (e.g. 1000ms) to capture the printed port before making the command async.
+3. Use the `run_command` tool to run the custom HTTP server script located at the skill's install path (e.g., `~/.gemini/skills/html-effectiveness/scripts/serve_html.py` for shared installs, `~/.agents/skills/html-effectiveness/scripts/serve_html.py` for workspace installs, `~/.gemini/antigravity/skills/html-effectiveness/scripts/serve_html.py` for legacy global installs, or `~/.gemini/antigravity-cli/skills/html-effectiveness/scripts/serve_html.py` for CLI global installs). Send it to the background (e.g., `...serve_html.py . &> /dev/null &`) or use appropriate timeouts so it doesn't block. Wait a short duration (e.g. 1000ms) to capture the printed port before making the command async.
 4. The script will output the port it chose (e.g., `Server started at http://localhost:43218`). Provide the user with the localhost URL (e.g., `http://localhost:<port>/filename.html`) so they can access it via their browser. Do not output the entire HTML code in your chat response.
 
 ## 5. Special Commands
@@ -85,18 +85,12 @@ When the user explicitly issues the `/task-spec` command:
 1. Based on the initial task discussion, design an interactive specification UI inside the Spec tab.
 2. The UI must clearly map out the operating environment, feature requirements, acceptance criteria (conditions), and necessary tools.
 3. Enable interactive fields or forms where the specification can be refined, edited, or expanded directly in the browser.
-4. **Mandatory Text Dialogue**: You MUST include a large multi-line text input box (`<textarea id="scopingInput">`) so the user can easily submit additional scoped instructions or custom scoping requirements to the `/api/agent` backend with the `task-spec` command.
+4. **Mandatory Text Dialogue**: You MUST include a large multi-line text input box (`<textarea id="scopingInput">`) so the user can easily draft additional scoped instructions or custom requirements.
 
 ### `/task-develop`
 When the user explicitly issues the `/task-develop` command:
 1. Construct an interactive develop or visual representation of the proposed solution based on the defined spec.
 2. Implement mock workflows, interactive wireframes, layouts, or simulated logic so the user can visualize and interact with the main features.
 3. Keep the develop highly interactive to encourage hands-on exploration.
-4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="developFeedback">`) for final implementation/verification feedback. When the user clicks the "Finalize & Execute" button, it sends the input to the `/api/agent` backend under the `task-develop` command, which directly implements the verified, functional solution in the user's workspace, running tests and updating the develop tab to display a beautiful completion dashboard.
+4. **Mandatory Text Dialogue & Finalization**: You MUST include a large multi-line text input box (`<textarea id="developFeedback">`) for final implementation/verification feedback.
 
-## 6. Workspace Context Retrieval Tool
-
-To autonomously retrieve context and reference documents, the AI agent is equipped with a heuristic-driven, semantic search capability: `perform_local_recursive_search`.
-
-### 6.1 Core Search Capabilities
-- **Intelligent Path Resolution:** Supports absolute paths, relative paths, and home-directory (`~/`) paths inside search queries, dynamically resolving them against the current repository and workspace tree structure to automatically locate and prioritize the target files.
