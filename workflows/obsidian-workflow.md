@@ -1,46 +1,48 @@
 # Obsidian Automation Workflow (CLI-Focused)
 
-This workflow defines the standard process for integrating AI Agent (Antigravity) with a local Obsidian vault using **Obsidian CLI** as the primary interface for automation.
+This workflow defines the standard process for integrating the AI Agent (Antigravity) with a local Obsidian vault, utilizing the `obsidian-cli` tool and the Python scripts provided in the `obsidian-cli` global skill.
 
 ## 1. Setup & Requirements
 
-### 1.1. Prerequisite: Obsidian CLI
-Ensure `obsidian-cli` is installed and the Obsidian application is running.
-- **Install**: `npm install -g obsidian-cli` (or relevant package).
-- **Verify**: Run `obsidian vault` to check connection to the active vault.
+### 1.1. Prerequisites
+- **Official Obsidian App**: Must be installed. Used for vault status checking and background execution (via `--hidden` flag).
+- **Community obsidian-cli**: The third-party CLI tool used for safe file operations (`create`, `append`).
+- **Global Skill**: The automation scripts (`main.py`, `cli_wrapper.py`, `classifier.py`, `indexer.py`) are located in `~/.gemini/skills/obsidian-cli/`.
 
-### 1.2. Integration Methods
-- **Method A (CLI Direct)**: Use `obsidian` commands to create and manage notes.
-- **Method B (Vault Context)**: Add the Obsidian vault as a root folder in the IDE for background context, but use CLI for active interactions.
+### 1.2. Configuration
+The Python wrapper requires two paths configured:
+- `vault_path`: The absolute path to the local Obsidian vault.
+- `obsidian_app_path`: The path to the official Obsidian executable.
 
-## 2. Operation Procedures (via obsidian-cli)
+## 2. Operation Procedures
 
-### 2.1. Processing the Inbox
-1. **Command**: `/obsidian process-inbox`
-2. **AI Action**: 
-   - Scans the `00_Inbox/` directory.
-   - For each file, runs: `obsidian create name="target_name.md" path="01_Atlas/Notes" content="processed content"`.
-   - Cleans up the inbox after confirmation.
+The standard AI automation pipeline follows the flow defined in the `obsidian-cli` skill's `main.py`:
 
-### 2.2. Dynamic Note Creation
-To save current session insights:
-1. **Instruction**: "AI, save this summary to Obsidian."
-2. **CLI Call**: `obsidian create name="Current_Task.md" path="Efforts/Projects" content="# Summary\n..." overwrite`
-3. **Best Practice**: Use `obsidian open file="Current_Task.md"` to show the result to the user immediately.
+### 2.1. Initialization and Indexing
+1. **Vault Connection**: Start Obsidian in the background (`--hidden`) and verify vault status.
+2. **Indexing**: Run the `indexer.py` (ContentMapIndexer) to scan the vault structure and build a content map.
 
-### 2.3. Appending to Daily Notes or Logs
-To update an existing project log:
-1. **Instruction**: "Add this update to my Project Log."
-2. **CLI Call**: `obsidian append file="Project_Log.md" content="- [ ] Update from [Timestamp]"`
+### 2.2. Processing the Inbox (Classification)
+When processing raw notes from `00_Inbox/`:
+1. **Classification**: Analyze the content (via `classifier.py`) and determine the category (Action, Context, Reference) and the specific Note Type (Thing, Statement, Question, Quote, Person).
+2. **Formatting**: 
+   - Apply YAML properties based on the Note Type (e.g., `origin` for Statements, `topic` for MOCs).
+   - Format action items in `> [!todo]` blocks with `- [ ]` checkboxes.
+   - Format caveats in `> [!warning]` blocks.
+3. **Routing (ACE Framework)**: Determine the target folder based on classification:
+   - Action -> `03_Efforts/Projects`
+   - Context -> `01_Atlas/Contexts`
+   - Reference -> `01_Atlas/Resources`
+4. **Creation**: Use the CLI wrapper (`obsidian-cli create --path <path> --content <content>`) to save the note. Filenames must be sanitized to avoid special characters.
 
-### 2.4. Task Management
-To sync code TODOs:
-1. **Instruction**: "Sync TODOs to Obsidian."
-2. **CLI Call**: `obsidian append file="Global_Todo.md" content="### From Codebase\n[ ] Task detail"`
+### 2.3. Content Map (MOC) Synthesis
+To prevent orphaned notes and support bottom-up growth:
+1. **Find MOC**: Query the indexer to find the most relevant existing Map of Content (MOC).
+2. **Append Link**: Automatically update the related MOC by appending a wikilink to the newly created note (e.g., `obsidian-cli append --path <moc_path> --content "- [[New Note]] : Summary"`).
+3. **Incremental Update**: Refresh the internal index with the new link.
 
 ## 3. Best Practices & Constraints
-- **No Icons**: Strictly follow the project override; avoid emojis in CLI-generated titles or content.
-- **Vault Targeting**: If multiple vaults exist, always specify `vault="VaultName"`.
-- **Formatting**: Ensure content passed to CLI is properly escaped for shell execution. Use key=value pairs (e.g., `name="note.md"`, `content="text"`).
-- **ACE Consistency**: Use the ACE (Atlas, Calendar, Efforts) and 00_Inbox folder framework within all `obsidian create` path arguments.
-- **Safety**: AI MUST ask for explicit user confirmation before executing any `delete` command.
+- **Command Injection Prevention**: Always pass paths and content as discrete arguments, utilizing the `cli_wrapper.py` functions to safely interface with the OS.
+- **No Icons**: Strictly follow the project override; avoid emojis in CLI-generated titles, properties, or content.
+- **ACE Consistency**: Adhere strictly to the ACE (01_Atlas, 02_Calendar, 03_Efforts) and 00_Inbox folder framework. Do not create deep category hierarchies.
+- **Safety**: The AI MUST ask for explicit user confirmation before executing any `delete` commands or performing batch destructive operations.
