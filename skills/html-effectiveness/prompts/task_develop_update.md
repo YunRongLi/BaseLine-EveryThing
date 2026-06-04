@@ -13,6 +13,7 @@ User's Feedback/Instructions:
 
 Analyze the feedback and output the updated develop.
 CRITICAL RULE FOR QUESTIONS: Limit the "open_questions" list strictly to at most three (3) of the most important remaining questions that must need the user to decide. Otherwise, you should research contents provided by the user, like local files or codes. Do not ask more than three.
+CRITICAL RULE: Always reuse existing code and strictly follow the established file structure. If you need to add new files or write new code that is not supported by the existing codebase, you MUST describe the reason for adding this code.
 CRITICAL RULE: Group related details into cohesive paragraph strings. Let the AI determine the optimal semantic grouping. Do NOT blindly split every single sentence or newline into a separate item.
 You MUST respond ONLY with a JSON block in this schema:
 ```json
@@ -20,7 +21,7 @@ You MUST respond ONLY with a JSON block in this schema:
   "develop": {{
     "workflow_steps": ["Step 1: cohesive paragraph...", "Step 2: cohesive paragraph..."],
     "file_tree": [
-      {{ "path": "...", "status": "..." }}
+      {{ "path": "...", "status": "...", "reason": "<string: reason for adding/modifying if new code is not supported by existing codebase, optional>" }}
     ],
     "code_snippets": [
       {{

@@ -43,29 +43,119 @@ _DEFAULT_STATE = {
 # ---------------------------------------------------------------------------
 
 _state_lock = threading.Lock()
+_in_memory_state = dict(_DEFAULT_STATE)
 
 def _load_state():
     with _state_lock:
-        if os.path.exists(_STATE_FILE):
-            try:
-                with open(_STATE_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
-        return dict(_DEFAULT_STATE)
+        return dict(_in_memory_state)
 
 
 def _save_state(state):
+    global _in_memory_state
     with _state_lock:
+        _in_memory_state = dict(state)
+
+
+_direct_sessions = {}
+_direct_sessions_lock = threading.Lock()
+
+def _call_gemini_direct_python(api_key, model, contents):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    req = urllib.request.Request(url, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("X-goog-api-key", api_key)
+    # Force Gemini to return strictly valid JSON
+    req.data = json.dumps({
+        "contents": contents,
+        "generationConfig": {
+            "responseMimeType": "application/json"
+        }
+    }).encode("utf-8")
+    
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def _handle_direct_message_post(session_id, body_dict, api_key):
+    user_parts = body_dict.get("parts", [])
+    user_text = "".join(p.get("text", "") for p in user_parts if p.get("type") == "text")
+    
+    with _direct_sessions_lock:
+        if session_id not in _direct_sessions:
+            _direct_sessions[session_id] = []
+        
+        user_msg = {
+            "info": {
+                "role": "user",
+                "time": {"created": "2026-05-28T12:00:00Z"}
+            },
+            "parts": [{"type": "text", "text": user_text}]
+        }
+        _direct_sessions[session_id].append(user_msg)
+        
+        asst_msg = {
+            "info": {
+                "role": "assistant",
+                "time": {"created": "2026-05-28T12:00:00Z", "completed": None}
+            },
+            "parts": [{"type": "text", "text": ""}]
+        }
+        _direct_sessions[session_id].append(asst_msg)
+        
+        contents = []
+        for msg in _direct_sessions[session_id][:-1]:
+            role = "model" if msg["info"]["role"] == "assistant" else "user"
+            parts = [{"text": p["text"]} for p in msg["parts"] if p["type"] == "text"]
+            if parts:
+                contents.append({"role": role, "parts": parts})
+                
+    def worker():
         try:
-            os.makedirs(os.path.dirname(_STATE_FILE), exist_ok=True)
-            with open(_STATE_FILE, "w", encoding="utf-8") as f:
-                json.dump(state, f, ensure_ascii=False, indent=2)
+            model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+            print(f"[serve_html] [Gemini Mode] Calling direct Gemini endpoint ({model})...")
+            sys.stdout.flush()
+            resp_data = _call_gemini_direct_python(api_key, model, contents)
+            candidates = resp_data.get("candidates", [])
+            if candidates and candidates[0].get("content"):
+                resp_parts = candidates[0]["content"].get("parts", [])
+                text_response = "".join(p.get("text", "") for p in resp_parts if "text" in p)
+                print(f"[serve_html] [Gemini Mode] Successfully received response from Gemini API ({len(text_response)} chars)")
+                sys.stdout.flush()
+            else:
+                text_response = f"ERROR: Invalid response from Gemini API: {resp_data}"
+                print(f"[serve_html] [Gemini Mode] Invalid response from Gemini API: {resp_data}", file=sys.stderr)
+                sys.stderr.flush()
+        except urllib.error.HTTPError as exc:
+            try:
+                err_content = exc.read().decode("utf-8")
+                try:
+                    err_json = json.loads(err_content)
+                    if "error" in err_json and "message" in err_json["error"]:
+                        err_msg = err_json["error"]["message"]
+                        text_response = f"ERROR: Gemini API call failed: {err_msg} (HTTP {exc.code})"
+                    else:
+                        text_response = f"ERROR: Gemini API call failed: {err_content} (HTTP {exc.code})"
+                except Exception:
+                    text_response = f"ERROR: Gemini API call failed: {err_content} (HTTP {exc.code})"
+            except Exception:
+                text_response = f"ERROR: Gemini API call failed: {exc}"
+            print(f"[serve_html] [Gemini Mode] HTTPError occurred: {text_response}", file=sys.stderr)
+            sys.stderr.flush()
         except Exception as exc:
-            print(f"[serve_html] State save error: {exc}", file=sys.stderr)
+            text_response = f"ERROR: Gemini API call failed: {exc}"
+            print(f"[serve_html] [Gemini Mode] Exception occurred: {exc}", file=sys.stderr)
+            sys.stderr.flush()
+            
+        with _direct_sessions_lock:
+            if session_id in _direct_sessions:
+                for msg in reversed(_direct_sessions[session_id]):
+                    if msg["info"]["role"] == "assistant" and msg["info"]["time"]["completed"] is None:
+                        msg["parts"] = [{"type": "text", "text": text_response}]
+                        msg["info"]["time"]["completed"] = "2026-05-28T12:00:00Z"
+                        msg["info"]["finish"] = True
+                        break
+                        
+    threading.Thread(target=worker, daemon=True).start()
 
-
-# ---------------------------------------------------------------------------
 # HTTP handler
 # ---------------------------------------------------------------------------
 
@@ -114,11 +204,23 @@ class SkillHTTPHandler(SimpleHTTPRequestHandler):
         return super().translate_path(path)
 
     def log_message(self, fmt, *args):
-        # Suppress polling noise
-        if args and isinstance(args[0], str) and "api/opencode" in args[0]:
-            return
+        # Suppress GET polling noise for sessions and messages to keep logs clean,
+        # but allow POST, PUT, DELETE, and other active requests to be logged.
+        if args and len(args) > 0 and isinstance(args[0], str):
+            request_line = args[0]
+            if "GET /api/opencode/session" in request_line:
+                return
         sys.stdout.write("%s - - [%s] %s\n" % (
             self.address_string(), self.log_date_time_string(), fmt % args))
+        sys.stdout.flush()
+
+    def end_headers(self):
+        # Prevent browser caching of client JS files to ensure the latest changes are loaded
+        if self.path.endswith(".js") or "opencode_client.js" in self.path:
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
 
     # ------------------------------------------------------------------
     # GET
@@ -216,19 +318,115 @@ class SkillHTTPHandler(SimpleHTTPRequestHandler):
     # OpenCode proxy
     # ------------------------------------------------------------------
 
+    def _handle_direct_mock(self, method, parsed, body):
+        import uuid
+        native_path = parsed.path[len("/api/opencode"):]
+        if not native_path:
+            native_path = "/"
+            
+        api_key = self.headers.get("X-goog-api-key") or os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            self._send_json({
+                "status": "error",
+                "message": "Gemini API Key is missing. Please configure GEMINI_API_KEY in the server environment or headers."
+            }, code=400)
+            return
+
+        if native_path == "/session":
+            if method == "POST":
+                try:
+                    payload = json.loads(body) if body else {}
+                except Exception:
+                    payload = {}
+                title = payload.get("title", "Task Workflow")
+                s_id = str(uuid.uuid4())
+                with _direct_sessions_lock:
+                    _direct_sessions[s_id] = []
+                self._send_json({"id": s_id, "title": title})
+            elif method == "GET":
+                with _direct_sessions_lock:
+                    s_list = [{"id": k, "title": "Task Workflow"} for k in _direct_sessions.keys()]
+                self._send_json(s_list)
+            else:
+                self._send_json({"status": "error", "message": f"Method {method} not allowed"}, code=405)
+                
+        elif native_path.startswith("/session/") and len(native_path.split("/")) == 3:
+            s_id = native_path.split("/")[-1]
+            if method == "DELETE":
+                with _direct_sessions_lock:
+                    if s_id in _direct_sessions:
+                        del _direct_sessions[s_id]
+                self._send_json({"status": "success"})
+            else:
+                self._send_json({"status": "error", "message": f"Method {method} not allowed"}, code=405)
+                
+        elif native_path.startswith("/session/") and native_path.endswith("/message"):
+            parts = native_path.split("/")
+            if len(parts) == 4 and parts[3] == "message":
+                s_id = parts[2]
+                if method == "GET":
+                    with _direct_sessions_lock:
+                        msgs = list(_direct_sessions.get(s_id, []))
+                    self._send_json(msgs)
+                elif method == "POST":
+                    try:
+                        payload = json.loads(body) if body else {}
+                    except Exception as e:
+                        self._send_json({"status": "error", "message": f"Invalid JSON: {e}"}, code=400)
+                        return
+                    _handle_direct_message_post(s_id, payload, api_key)
+                    self._send_json({"status": "success", "info": {"role": "user"}})
+                else:
+                    self._send_json({"status": "error", "message": f"Method {method} not allowed"}, code=405)
+            else:
+                self._send_json({"status": "error", "message": f"Endpoint not found: {native_path}"}, code=404)
+        else:
+            self._send_json({"status": "error", "message": f"Endpoint not found: {native_path}"}, code=404)
+
     def _proxy(self, method, parsed, body=b""):
+        opencode_url = self.headers.get("X-opencode-url")
+        api_key = self.headers.get("X-goog-api-key") or os.environ.get("GEMINI_API_KEY")
+        selected_provider = self.headers.get("X-selected-provider-model")
+
+        use_gemini_mock = False
+        if selected_provider:
+            if selected_provider.startswith("gemini-"):
+                use_gemini_mock = True
+        elif api_key:
+            use_gemini_mock = True
+
+        mode_str = "Gemini Direct Mock" if (use_gemini_mock and api_key) else "OpenCode Server"
+        print(f"[serve_html] Proxy routing: {method} {parsed.path} -> mode={mode_str}")
+        sys.stdout.flush()
+
+        if use_gemini_mock and api_key:
+            if selected_provider and selected_provider.startswith("gemini-"):
+                os.environ["GEMINI_MODEL"] = selected_provider
+            self._handle_direct_mock(method, parsed, body)
+            return
+
         # Strip /api/opencode prefix to get the native OpenCode path
         native_path = parsed.path[len("/api/opencode"):]
         if not native_path:
             native_path = "/"
 
-        oc_url = f"{_OC_BASE}{native_path}"
+        oc_base_url = opencode_url or _OC_BASE
+        oc_url = f"{oc_base_url.rstrip('/')}{native_path}"
         if parsed.query:
             oc_url += f"?{parsed.query}"
 
+        print(f"[serve_html] Proxying to OpenCode endpoint: {oc_url}")
+        sys.stdout.flush()
+
         req = urllib.request.Request(oc_url, method=method)
+        # Forward headers from incoming request, excluding accept-encoding to prevent compression issues:
+        for header, value in self.headers.items():
+            if header.lower() not in ("host", "content-length", "content-type", "accept", "accept-encoding"):
+                req.add_header(header, value)
+                
         req.add_header("Content-Type", "application/json")
         req.add_header("Accept", "application/json")
+        req.add_header("Accept-Encoding", "identity")
 
         if method in ("POST", "PUT", "PATCH") and body:
             req.data = body if isinstance(body, bytes) else body.encode("utf-8")
@@ -244,17 +442,23 @@ class SkillHTTPHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as exc:
             err_body = exc.read()
+            print(f"[serve_html] OpenCode backend returned HTTPError {exc.code}: {err_body.decode('utf-8', errors='ignore')}", file=sys.stderr)
+            sys.stderr.flush()
             self.send_response(exc.code)
             self._cors_headers()
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(err_body)
         except urllib.error.URLError as exc:
+            print(f"[serve_html] OpenCode backend URLError: {exc.reason}", file=sys.stderr)
+            sys.stderr.flush()
             self._send_json({
                 "status": "error",
                 "message": f"Cannot connect to OpenCode backend server: {exc.reason}. Verify that OpenCode is running on port 4096."
             }, code=503)
         except Exception as exc:
+            print(f"[serve_html] OpenCode backend proxy exception: {exc}", file=sys.stderr)
+            sys.stderr.flush()
             self._send_json({"status": "error", "message": f"Proxy error: {exc}"}, code=502)
 
     # ------------------------------------------------------------------

@@ -431,7 +431,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
                 <div>
                     <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
-                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and local OpenCode server URL.</p>
                 </div>
                 <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
             </div>
@@ -445,12 +445,8 @@
                     <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
                 </div>
                 <div>
-                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
-                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
-                </div>
-                <div>
-                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
-                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                    <label data-i18n="lblOpencodeServerUrl">OpenCode Server URL</label>
+                    <input type="text" id="opencodeServerUrl" placeholder="http://127.0.0.1:4096">
                 </div>
                 <div style="grid-column:1/-1;">
                     <label data-i18n="lblBackendStatus">Backend Status</label>
@@ -707,21 +703,66 @@
         }
 
         async function refreshModelSelect() {
-            // Models are handled natively by OpenCode extension config
-            const select = document.getElementById('globalModelSelect');
-            if (select) {
-                select.innerHTML = '<option value="opencode-native" selected>OpenCode Native Model</option>';
+            if (typeof window.refreshModelSelect === 'function') {
+                await window.refreshModelSelect();
+            } else {
+                const select = document.getElementById('globalModelSelect');
+                if (select) select.style.display = 'none';
             }
         }
 
         async function loadAgentConfig() {
-            // Deprecated in OpenCode mode
-            const status = document.getElementById('backendStatus');
-            if (status) status.textContent = 'OpenCode Native API Active';
+            const geminiKey = localStorage.getItem('gemini_api_key') || '';
+            const anthropicKey = localStorage.getItem('anthropic_api_key') || '';
+            const opencodeUrl = localStorage.getItem('opencode_server_url') || 'http://127.0.0.1:4096';
+            
+            const geminiEl = document.getElementById('geminiApiKey');
+            const anthropicEl = document.getElementById('anthropicApiKey');
+            const opencodeUrlEl = document.getElementById('opencodeServerUrl');
+            
+            if (geminiEl) geminiEl.value = geminiKey;
+            if (anthropicEl) anthropicEl.value = anthropicKey;
+            if (opencodeUrlEl) opencodeUrlEl.value = opencodeUrl;
+
+            const provider = localStorage.getItem('selected_provider_model') || 'opencode';
+            const backendStatus = document.getElementById('backendStatus');
+            if (backendStatus) {
+                if (provider.startsWith('gemini-')) {
+                    backendStatus.textContent = `Direct Gemini Mode (Model: ${provider})`;
+                } else {
+                    backendStatus.textContent = `OpenCode server at ${opencodeUrl}`;
+                }
+            }
         }
 
         async function saveAgentConfig() {
-            setAgentConfigFeedback('Agent config is managed via OpenCode native settings in this mode.', false);
+            const geminiEl = document.getElementById('geminiApiKey');
+            const anthropicEl = document.getElementById('anthropicApiKey');
+            const opencodeUrlEl = document.getElementById('opencodeServerUrl');
+            
+            const geminiKey = geminiEl ? geminiEl.value.trim() : '';
+            const anthropicKey = anthropicEl ? anthropicEl.value.trim() : '';
+            const opencodeUrl = opencodeUrlEl ? opencodeUrlEl.value.trim() : '';
+
+            if (geminiEl) localStorage.setItem('gemini_api_key', geminiKey);
+            if (anthropicEl) localStorage.setItem('anthropic_api_key', anthropicKey);
+            if (opencodeUrlEl) localStorage.setItem('opencode_server_url', opencodeUrl);
+            
+            if (geminiKey) {
+                const currentProvider = localStorage.getItem('selected_provider_model') || 'opencode';
+                if (!currentProvider.startsWith('gemini-')) {
+                    localStorage.setItem('selected_provider_model', 'gemini-3.5-flash');
+                }
+            } else {
+                localStorage.setItem('selected_provider_model', 'opencode');
+            }
+            
+            setAgentConfigFeedback('Configuration saved successfully!', false);
+            setTimeout(() => {
+                setAgentConfigFeedback('');
+                closeAgentConfigModal();
+                window.location.reload();
+            }, 1000);
         }
 
         function openAgentConfigModal() {
@@ -1092,20 +1133,35 @@ ${context}`;
             input.value = '';
             try {
                 setLoading(true, null);
+                logDebug(`[CHAT] Initializing message send...`);
+                
                 const sessionId = await ocGetOrCreateSessionId();
+                logDebug(`[CHAT] Using Session ID: ${sessionId}`);
+                
                 const lang = localStorage.getItem('app_lang') || 'en';
                 const prompt = ocBuildChatPrompt(msg, lang);
-                await ocSendPrompt(sessionId, prompt);
-                const result = await ocPollForCompletion(sessionId, 'chat', null);
+                logDebug(`[CHAT] Constructed Prompt: ${prompt.substring(0, 100)}...`);
+                
+                logDebug(`[CHAT] Sending prompt to server...`);
+                const sendResult = await ocSendPrompt(sessionId, prompt);
+                logDebug(`[CHAT] Prompt sent successfully. Result: ${JSON.stringify(sendResult)}`);
+                
+                logDebug(`[CHAT] Starting to poll for response...`);
+                const result = await ocPollForCompletion(sessionId, 'chat', (chunk) => {
+                    logDebug(`[CHAT] Polling chunk: ${chunk.substring(0, 50)}...`);
+                });
+                logDebug(`[CHAT] Completed poll successfully. Result: ${JSON.stringify(result)}`);
+                
                 appendAgentOutput(result?.chat || JSON.stringify(result, null, 2));
             } catch(e) {
+                logDebug(`[CHAT] ERROR: ${e.message}`);
                 appendAgentOutput('Error: ' + e.message);
             } finally {
                 setLoading(false, null);
             }
         }
     </script>
-    <script src="/opencode_client.js"></script>
+    <script src="/opencode_client.js?v=3"></script>
     <script src="/sessions.js"></script>
     <script src="/terminal_input.js"></script>
     <script src="/keyboard_shortcuts.js"></script>

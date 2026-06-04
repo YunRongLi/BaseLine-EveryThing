@@ -760,7 +760,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
                 <div>
                     <div class="eyebrow" data-i18n="eyebrowAgentConfig">Agent Configuration</div>
-                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and VLLM endpoint for model selection.</p>
+                    <p style="margin:0; color:var(--gray-600); font-size:0.95rem;">Configure backend credentials and local OpenCode server URL.</p>
                 </div>
                 <button type="button" onclick="closeAgentConfigModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;">&times;</button>
             </div>
@@ -774,12 +774,8 @@
                     <input type="text" id="anthropicApiKey" placeholder="ANTHROPIC_API_KEY">
                 </div>
                 <div>
-                    <label data-i18n="lblVllmUrl">VLLM API URL</label>
-                    <input type="text" id="vllmApiUrl" placeholder="http://127.0.0.1:8000/v1/chat/completions">
-                </div>
-                <div>
-                    <label data-i18n="lblVllmDefaultModel">VLLM Default Model</label>
-                    <input type="text" id="vllmDefaultModel" placeholder="devstral">
+                    <label data-i18n="lblOpencodeServerUrl">OpenCode Server URL</label>
+                    <input type="text" id="opencodeServerUrl" placeholder="http://127.0.0.1:4096">
                 </div>
                 <div style="grid-column:1/-1;">
                     <label data-i18n="lblBackendStatus">Backend Status</label>
@@ -1232,18 +1228,23 @@
         }
 
         // Dynamic visual list for file tree
-        function addFileRow(path = '', status = 'new') {
+        function addFileRow(path = '', status = 'new', reason = '') {
             const container = document.getElementById('filesContainer');
             const row = document.createElement('div');
             row.className = 'list-row file-row';
+            row.style.display = 'flex';
+            row.style.flexWrap = 'wrap';
+            row.style.gap = '8px';
+            row.style.marginBottom = '8px';
             
             row.innerHTML = `
-                <input type="text" class="file-path-input" value="${path}" placeholder="e.g. src/main.py" style="flex: 1; font-family: var(--mono); font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-height: 38px;">
+                <input type="text" class="file-path-input" value="${path}" placeholder="e.g. src/main.py" style="flex: 2; font-family: var(--mono); font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-width: 150px; min-height: 38px;">
                 <select class="file-status-select" style="width: auto; font-family: var(--mono); font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-height: 38px;">
                     <option value="new" ${status === 'new' ? 'selected' : ''}>[NEW]</option>
                     <option value="modified" ${status === 'modified' ? 'selected' : ''}>[MODIFY]</option>
                     <option value="deleted" ${status === 'deleted' ? 'selected' : ''}>[DELETE]</option>
                 </select>
+                <input type="text" class="file-reason-input" value="${reason}" placeholder="Reason if new/modified (optional)..." style="flex: 3; font-size: 0.8125rem; padding: 0.4rem; border: 1.5px solid var(--gray-200); border-radius: 6px; min-width: 200px; min-height: 38px;">
                 <button type="button" class="btn-action-small" onclick="this.closest('.file-row').remove()" style="min-height: 38px; padding: 0.4rem 0.8rem;">[x]</button>
             `;
             container.appendChild(row);
@@ -1254,8 +1255,9 @@
             document.querySelectorAll('.file-row').forEach(row => {
                 const path = row.querySelector('.file-path-input').value.trim();
                 const status = row.querySelector('.file-status-select').value;
+                const reason = row.querySelector('.file-reason-input').value.trim();
                 if (path) {
-                    files.push({ path, status });
+                    files.push({ path, status, reason });
                 }
             });
             return files;
@@ -1433,7 +1435,13 @@
                         fileContainer.innerHTML = '';
                         state.completed_data.created_files.forEach(f => {
                             const item = document.createElement('div');
-                            item.textContent = `[Written] ${f}`;
+                            if (f && typeof f === 'object' && f.path) {
+                                let desc = `[Written] ${f.path}`;
+                                if (f.reason) desc += ` (Reason: ${f.reason})`;
+                                item.textContent = desc;
+                            } else {
+                                item.textContent = `[Written] ${f}`;
+                            }
                             fileContainer.appendChild(item);
                         });
                         
@@ -1454,7 +1462,7 @@
                         const fContainer = document.getElementById('filesContainer');
                         fContainer.innerHTML = '';
                         if (files.length > 0) {
-                            files.forEach(f => addFileRow(f.path, f.status));
+                            files.forEach(f => addFileRow(f.path, f.status, f.reason || ''));
                         } else {
                             addFileRow('', 'new');
                         }
@@ -1532,10 +1540,58 @@
             if (select) select.style.display = 'none';
         }
         async function loadAgentConfig() {
+            const geminiKey = localStorage.getItem('gemini_api_key') || '';
+            const anthropicKey = localStorage.getItem('anthropic_api_key') || '';
+            const opencodeUrl = localStorage.getItem('opencode_server_url') || 'http://127.0.0.1:4096';
+            
+            const geminiEl = document.getElementById('geminiApiKey');
+            const anthropicEl = document.getElementById('anthropicApiKey');
+            const opencodeUrlEl = document.getElementById('opencodeServerUrl');
+            
+            if (geminiEl) geminiEl.value = geminiKey;
+            if (anthropicEl) anthropicEl.value = anthropicKey;
+            if (opencodeUrlEl) opencodeUrlEl.value = opencodeUrl;
+
+            const provider = localStorage.getItem('selected_provider_model') || 'opencode';
             const backendStatus = document.getElementById('backendStatus');
-            if (backendStatus) backendStatus.textContent = 'OpenCode server at 127.0.0.1:4096';
+            if (backendStatus) {
+                if (provider.startsWith('gemini-')) {
+                    backendStatus.textContent = `Direct Gemini Mode (Model: ${provider})`;
+                } else {
+                    backendStatus.textContent = `OpenCode server at ${opencodeUrl}`;
+                }
+            }
         }
-        async function saveAgentConfig() { closeAgentConfigModal(); }
+
+        async function saveAgentConfig() {
+            const geminiEl = document.getElementById('geminiApiKey');
+            const anthropicEl = document.getElementById('anthropicApiKey');
+            const opencodeUrlEl = document.getElementById('opencodeServerUrl');
+            
+            const geminiKey = geminiEl ? geminiEl.value.trim() : '';
+            const anthropicKey = anthropicEl ? anthropicEl.value.trim() : '';
+            const opencodeUrl = opencodeUrlEl ? opencodeUrlEl.value.trim() : '';
+
+            if (geminiEl) localStorage.setItem('gemini_api_key', geminiKey);
+            if (anthropicEl) localStorage.setItem('anthropic_api_key', anthropicKey);
+            if (opencodeUrlEl) localStorage.setItem('opencode_server_url', opencodeUrl);
+            
+            if (geminiKey) {
+                const currentProvider = localStorage.getItem('selected_provider_model') || 'opencode';
+                if (!currentProvider.startsWith('gemini-')) {
+                    localStorage.setItem('selected_provider_model', 'gemini-3.5-flash');
+                }
+            } else {
+                localStorage.setItem('selected_provider_model', 'opencode');
+            }
+            
+            setAgentConfigFeedback('Configuration saved successfully!', false);
+            setTimeout(() => {
+                setAgentConfigFeedback('');
+                closeAgentConfigModal();
+                window.location.reload();
+            }, 1000);
+        }
 
         function openAgentConfigModal() {
             const modal = document.getElementById('agentConfigModal');
@@ -1570,7 +1626,7 @@
                 ? `[User Answers to Open Questions]\n${answersText}\n[Additional Scoping/Feedback]\n${rawFeedback}`
                 : rawFeedback;
 
-            logDebug(`Sending develop request (isUpdate=${isUpdate}) via OpenCode...`);
+            logDebug(`Sending develop request (isUpdate=${isUpdate}) via ${_isDirectGeminiMode() ? 'Gemini' : 'OpenCode'}...`);
 
             try {
                 const sessionId = await ocGetOrCreateSessionId();
@@ -1914,7 +1970,7 @@
             }
         }
     </script>
-    <script src="/opencode_client.js"></script>
+    <script src="/opencode_client.js?v=3"></script>
     <script src="/sessions.js"></script>
     <script src="/terminal_input.js"></script>
     <script src="/keyboard_shortcuts.js"></script>

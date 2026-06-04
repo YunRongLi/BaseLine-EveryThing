@@ -29,16 +29,64 @@ const POLL_TIMEOUT_MS = 300_000;
 // Session management
 // ---------------------------------------------------------------------------
 
+function _isDirectGeminiMode() {
+    const val = localStorage.getItem('selected_provider_model') || 'opencode';
+    return val.startsWith('gemini-');
+}
+
+function _getLocalMessages() {
+    try {
+        const stored = localStorage.getItem('gemini_session_history');
+        return stored ? JSON.parse(stored) : [];
+    } catch (_) {
+        return [];
+    }
+}
+
+function _saveLocalMessages(msgs) {
+    try {
+        localStorage.setItem('gemini_session_history', JSON.stringify(msgs));
+    } catch (_) {}
+}
+
+function _clearLocalMessages() {
+    try {
+        localStorage.removeItem('gemini_session_history');
+    } catch (_) {}
+}
+
+function _getProxyHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const opencodeUrl = localStorage.getItem('opencode_server_url');
+    if (opencodeUrl) {
+        headers['X-opencode-url'] = opencodeUrl;
+    }
+    const geminiApiKey = localStorage.getItem('gemini_api_key');
+    if (geminiApiKey) {
+        headers['X-goog-api-key'] = geminiApiKey;
+    }
+    const provider = localStorage.getItem('selected_provider_model') || 'opencode';
+    headers['X-selected-provider-model'] = provider;
+    return headers;
+}
+
 async function ocListSessions() {
-    const res = await fetch(`${OC_BASE}/session`);
+    if (_isDirectGeminiMode()) {
+        return [{ id: 'direct-gemini-session', title: 'Task Workflow' }];
+    }
+    const res = await fetch(`${OC_BASE}/session`, { headers: _getProxyHeaders() });
     if (!res.ok) throw new Error(`listSessions: HTTP ${res.status}`);
     return res.json();
 }
 
 async function ocCreateSession(title = 'Task Workflow') {
+    if (_isDirectGeminiMode()) {
+        _clearLocalMessages();
+        return { id: 'direct-gemini-session', title };
+    }
     const res = await fetch(`${OC_BASE}/session`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: _getProxyHeaders(),
         body: JSON.stringify({ title }),
     });
     if (!res.ok) throw new Error(`createSession: HTTP ${res.status}`);
@@ -46,15 +94,37 @@ async function ocCreateSession(title = 'Task Workflow') {
 }
 
 async function ocDeleteSession(sessionId) {
-    const res = await fetch(`${OC_BASE}/session/${sessionId}`, { method: 'DELETE' });
+    if (_isDirectGeminiMode()) {
+        _clearLocalMessages();
+        return { status: 'success' };
+    }
+    const res = await fetch(`${OC_BASE}/session/${sessionId}`, {
+        method: 'DELETE',
+        headers: _getProxyHeaders(),
+    });
     if (!res.ok) throw new Error(`deleteSession: HTTP ${res.status}`);
     return res.json();
 }
 
 /** Get or create a session ID, persisting to localStorage. */
 async function ocGetOrCreateSessionId() {
+    if (_isDirectGeminiMode()) {
+        return 'direct-gemini-session';
+    }
     const stored = localStorage.getItem('opencode_session_id');
-    if (stored) return stored;
+    if (stored && stored !== 'undefined') {
+        try {
+            // Verify if the session actually exists on the server to prevent stale 404s
+            const res = await fetch(`${OC_BASE}/session/${stored}`, { headers: _getProxyHeaders() });
+            if (res.ok) {
+                return stored;
+            }
+            console.log(`[DEBUG] Cached session ${stored} verification failed (status ${res.status}). Clearing.`);
+            localStorage.removeItem('opencode_session_id');
+        } catch (e) {
+            console.log(`[DEBUG] Error verifying session:`, e);
+        }
+    }
 
     const created = await ocCreateSession('Task Workflow');
     const id = created.id;
@@ -73,9 +143,113 @@ async function ocGetOrCreateSessionId() {
  * @returns {Promise<object>} - Raw API response
  */
 async function ocSendPrompt(sessionId, promptText) {
-    const res = await fetch(`${OC_BASE}/session/${sessionId}/message`, {
+    const isDirect = _isDirectGeminiMode();
+    const mode = isDirect ? 'Direct Gemini Mode' : 'Proxy Mode';
+    ocLogDebug(`[ocSendPrompt] Initiating request to session "${sessionId}" via ${mode}...`);
+
+    if (isDirect) {
+        const localMsgs = _getLocalMessages();
+        const userMsg = {
+            info: { role: 'user', time: { created: new Date().toISOString() } },
+            parts: [{ type: 'text', text: promptText }]
+        };
+        localMsgs.push(userMsg);
+        _saveLocalMessages(localMsgs);
+
+        try {
+            const apiKey = localStorage.getItem('gemini_api_key');
+            if (!apiKey) {
+                throw new Error("Gemini API Key is missing. Please click the 'Configure' button to set your GEMINI_API_KEY.");
+            }
+            const model = localStorage.getItem('selected_provider_model') || 'gemini-2.5-flash';
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+            ocLogDebug(`[ocSendPrompt] Mode: Direct Gemini. Model: "${model}". Message count: ${localMsgs.length}.`);
+            ocLogDebug(`[ocSendPrompt] POST target: ${endpoint}`);
+
+            const contents = [];
+            for (const msg of localMsgs) {
+                const role = msg.info && msg.info.role === 'assistant' ? 'model' : 'user';
+                const parts = [];
+                if (msg.parts) {
+                    for (const p of msg.parts) {
+                        if (p.type === 'text') parts.push({ text: p.text });
+                    }
+                }
+                if (parts.length > 0) {
+                    contents.push({ role, parts });
+                }
+            }
+
+            ocLogDebug(`[ocSendPrompt] Firing request to Google API...`);
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-goog-api-key': apiKey
+                },
+                body: JSON.stringify({ 
+                    contents,
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                ocLogDebug(`[ocSendPrompt] Error response from Google API: HTTP ${res.status}\n${errText}`);
+                throw new Error(`Gemini API Error: HTTP ${res.status} - ${errText}`);
+            }
+
+            const data = await res.json();
+            if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
+                ocLogDebug(`[ocSendPrompt] Received empty content payload from Gemini API.`);
+                throw new Error("Empty response from Gemini API");
+            }
+
+            const responseText = data.candidates[0].content.parts[0].text;
+            ocLogDebug(`[ocSendPrompt] Response successfully received. Payload size: ${responseText.length} characters.`);
+
+            const updatedMsgs = _getLocalMessages();
+            const assistantMsg = {
+                info: {
+                    role: 'assistant',
+                    time: { completed: new Date().toISOString() },
+                    finish: true
+                },
+                parts: [{ type: 'text', text: responseText }]
+            };
+            updatedMsgs.push(assistantMsg);
+            _saveLocalMessages(updatedMsgs);
+
+        } catch (e) {
+            ocLogDebug(`[ocSendPrompt] Exception encountered: ${e.message}`);
+            const updatedMsgs = _getLocalMessages();
+            const errorMsg = {
+                info: {
+                    role: 'assistant',
+                    time: { completed: new Date().toISOString() },
+                    finish: true
+                },
+                parts: [{ type: 'text', text: `ERROR: ${e.message}` }]
+            };
+            updatedMsgs.push(errorMsg);
+            _saveLocalMessages(updatedMsgs);
+        }
+
+        return { status: 'success' };
+    }
+
+    const endpoint = `${OC_BASE}/session/${sessionId}/message`;
+    const proxyHeaders = _getProxyHeaders();
+    ocLogDebug(`[ocSendPrompt] Mode: Proxy Mode. Endpoint: ${endpoint}`);
+    ocLogDebug(`[ocSendPrompt] Headers: ${JSON.stringify(proxyHeaders)}`);
+    ocLogDebug(`[ocSendPrompt] Firing request to backend proxy...`);
+
+    const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: proxyHeaders,
         body: JSON.stringify({
             parts: [
                 {
@@ -85,8 +259,13 @@ async function ocSendPrompt(sessionId, promptText) {
             ]
         }),
     });
+    console.log(`[DEBUG] ocSendPrompt res.ok=${res.ok}, status=${res.status}`);
+    ocLogDebug(`[ocSendPrompt] Backend response: HTTP ${res.status} (ok=${res.ok})`);
     if (!res.ok) throw new Error(`sendPrompt: HTTP ${res.status}`);
-    return res.json();
+    const data = await res.json();
+    ocLogDebug(`[ocSendPrompt] Success! Message registered on backend server.`);
+    console.log(`[DEBUG] ocSendPrompt response data:`, data);
+    return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,9 +276,17 @@ async function ocSendPrompt(sessionId, promptText) {
  * Fetch the full message timeline for a session.
  */
 async function ocGetMessages(sessionId) {
-    const res = await fetch(`${OC_BASE}/session/${sessionId}/message`);
-    if (!res.ok) throw new Error(`getMessages: HTTP ${res.status}`);
-    return res.json();
+    if (_isDirectGeminiMode()) {
+        return _getLocalMessages();
+    }
+    const res = await fetch(`${OC_BASE}/session/${sessionId}/message`, { headers: _getProxyHeaders() });
+    if (!res.ok) {
+        console.log(`[DEBUG] ocGetMessages HTTP error: ${res.status}`);
+        throw new Error(`getMessages: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    console.log(`[DEBUG] ocGetMessages returned ${data.length} messages. Last message parts:`, data.length ? data[data.length-1].parts : 'none');
+    return data;
 }
 
 /**
@@ -160,6 +347,7 @@ function ocExtractJson(text) {
  */
 async function ocPollForCompletion(sessionId, expectedEventType, onChunk) {
     const deadline = Date.now() + POLL_TIMEOUT_MS;
+    ocLogDebug(`[ocPollForCompletion] Starting poll for event type "${expectedEventType}" in session "${sessionId}"...`);
 
     while (Date.now() < deadline) {
         await _sleep(POLL_INTERVAL_MS);
@@ -183,13 +371,44 @@ async function ocPollForCompletion(sessionId, expectedEventType, onChunk) {
 
         if (onChunk && fullText) onChunk(fullText);
 
+        if (fullText.trim().startsWith('ERROR:')) {
+            ocLogDebug(`[ocPollForCompletion] Detected ERROR response text: ${fullText.trim()}`);
+            throw new Error(fullText.trim());
+        }
+
         // Check if message has finished generating (info.time.completed or info.finish exists)
         const isCompleted = last.info && last.info.time && (last.info.time.completed || last.info.finish);
         if (!isCompleted) continue;
 
+        ocLogDebug(`[ocPollForCompletion] Message received (completed). Extracting JSON...`);
+
+        // Balance-tracking brace matching to safely locate the valid JSON block
         const parsed = ocExtractJson(fullText);
+        ocLogDebug(`[ocPollForCompletion] Extraction result: ${parsed ? 'Valid JSON' : 'Failed to parse JSON'}`);
+
         if (parsed && (parsed.event_type === expectedEventType || !expectedEventType)) {
+            ocLogDebug(`[ocPollForCompletion] SUCCESS: Resolved expected event type "${expectedEventType}".`);
             return parsed;
+        }
+
+        // Fallback if completed but cannot parse structured JSON (or if expectedEventType is 'chat')
+        if (expectedEventType === 'chat') {
+            return { chat: fullText, event_type: 'chat' };
+        }
+
+        // If completed but wrong event_type/invalid JSON, throw an error to prevent infinite polling loop
+        if (parsed) {
+            if (parsed.error && typeof parsed.error === 'object' && parsed.error.message) {
+                ocLogDebug(`[ocPollForCompletion] Gemini API JSON Error detected: ${parsed.error.message} (Code: ${parsed.error.code || 'unknown'})`);
+                throw new Error(`Gemini API Error: ${parsed.error.message} (Code: ${parsed.error.code || 'unknown'})`);
+            }
+            const errMsg = `Expected event type "${expectedEventType}", but got "${parsed.event_type}". Raw response text: ${JSON.stringify(parsed)}`;
+            ocLogDebug(`[ocPollForCompletion] ERROR: ${errMsg}`);
+            throw new Error(errMsg);
+        } else {
+            const errMsg = `Failed to parse structured JSON response from assistant. Raw text: ${fullText}`;
+            ocLogDebug(`[ocPollForCompletion] ERROR: ${errMsg}`);
+            throw new Error(errMsg);
         }
     }
 
@@ -238,9 +457,7 @@ You MUST respond ONLY with a JSON block matching this exact schema:
 {
   "explore": {
     "insights": [
-      "[Component Overview] Description of the component/file and its design intent.",
-      "[Key Capabilities] Concrete features, APIs, or system flows identified.",
-      "[Suggested Next Steps] Recommended files or directories to examine next."
+      "<response>"
     ]
   },
   "event_type": "task_explore"
@@ -629,3 +846,101 @@ function ocParseMarkdown(text) {
     }
     return html;
 }
+
+// ---------------------------------------------------------------------------
+// Provider & Configuration UI Auto-Hooks
+// ---------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', () => {
+    const geminiKeyInput = document.getElementById('geminiApiKey');
+    const anthropicKeyInput = document.getElementById('anthropicApiKey');
+
+    if (geminiKeyInput) geminiKeyInput.value = localStorage.getItem('gemini_api_key') || '';
+    if (anthropicKeyInput) anthropicKeyInput.value = localStorage.getItem('anthropic_api_key') || '';
+
+    const backendStatus = document.getElementById('backendStatus');
+    if (backendStatus) {
+        const provider = localStorage.getItem('selected_provider_model') || 'opencode';
+        const opencodeUrl = localStorage.getItem('opencode_server_url') || 'http://127.0.0.1:4096';
+        if (provider.startsWith('gemini-')) {
+            backendStatus.textContent = `Direct Gemini Mode (Model: ${provider})`;
+        } else {
+            backendStatus.textContent = `OpenCode server at ${opencodeUrl}`;
+        }
+    }
+
+    const saveBtn = document.getElementById('modal-save-agent-config');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const geminiKey = geminiKeyInput ? geminiKeyInput.value.trim() : '';
+            if (geminiKeyInput) localStorage.setItem('gemini_api_key', geminiKey);
+            if (anthropicKeyInput) localStorage.setItem('anthropic_api_key', anthropicKeyInput.value.trim());
+            
+            if (geminiKey) {
+                const currentProvider = localStorage.getItem('selected_provider_model') || 'opencode';
+                if (!currentProvider.startsWith('gemini-')) {
+                    localStorage.setItem('selected_provider_model', 'gemini-3.5-flash');
+                }
+            } else {
+                localStorage.setItem('selected_provider_model', 'opencode');
+            }
+
+            const feedback = document.getElementById('agentConfigFeedback');
+            if (feedback) {
+                feedback.textContent = "Configuration saved successfully!";
+                feedback.style.color = "var(--olive)";
+            }
+            setTimeout(() => {
+                const modal = document.getElementById('agentConfigModal');
+                if (modal) modal.style.display = 'none';
+                window.location.reload();
+            }, 1000);
+        });
+    }
+});
+
+window.refreshModelSelect = async function() {
+    const select = document.getElementById('globalModelSelect');
+    if (!select) return;
+
+    select.style.display = 'inline-block';
+    select.style.width = 'auto';
+    select.style.padding = '0.4rem';
+    select.style.borderRadius = '6px';
+    select.style.border = '1.5px solid var(--gray-200)';
+    select.style.backgroundColor = 'var(--paper)';
+    select.style.color = 'var(--slate)';
+    select.style.fontSize = '0.8125rem';
+    select.style.fontFamily = 'var(--mono)';
+    select.style.marginRight = '0.5rem';
+
+    select.innerHTML = `
+        <option value="opencode">OpenCode Backend</option>
+        <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+        <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+        <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+        <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
+        <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
+        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+    `;
+
+    const saved = localStorage.getItem('selected_provider_model') || 'opencode';
+    select.value = saved;
+
+    select.addEventListener('change', () => {
+        const val = select.value;
+        localStorage.setItem('selected_provider_model', val);
+        ocLogDebug(`Backend provider switched to: ${val}`);
+        
+        const backendStatus = document.getElementById('backendStatus');
+        if (backendStatus) {
+            if (val.startsWith('gemini-')) {
+                backendStatus.textContent = `Direct Gemini Mode (Model: ${val})`;
+            } else {
+                const opencodeUrl = localStorage.getItem('opencode_server_url') || 'http://127.0.0.1:4096';
+                backendStatus.textContent = `OpenCode server at ${opencodeUrl}`;
+            }
+        }
+    });
+};
