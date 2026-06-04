@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenCode and HTML Backend Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%WORKSPACE_PATH%
+ExecStart=%WORKSPACE_PATH%/skills/html-effectiveness/scripts/serve_all.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
