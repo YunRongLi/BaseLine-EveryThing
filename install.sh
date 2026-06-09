@@ -1,8 +1,7 @@
-# AI Agent Rules & Skills Installer
+# AI Agent Skills & Workflows Installer
 
 AGENT="antigravity"
 SCOPE="global"
-RULES="all"
 PLUGIN_NAME="baseline-everything"
 
 # Parse arguments
@@ -10,8 +9,6 @@ while [ $# -gt 0 ]; do
     case $1 in
         antigravity|antigravity-ide|opencode) AGENT="$1" ;;
         global|workspace) SCOPE="$1" ;;
-        --rule=*|--rules=*) RULES="${1#*=}" ;;
-        --rule|--rules) RULES="$2"; shift ;;
         --path=*) TARGET_PATH="${1#*=}" ;;
         --path) TARGET_PATH="$2"; shift ;;
         --plugin-name=*) PLUGIN_NAME="${1#*=}" ;;
@@ -19,14 +16,13 @@ while [ $# -gt 0 ]; do
         -h|--help)
             echo "Usage: ./install.sh [AGENT] [SCOPE] [OPTIONS]"
             echo ""
-            echo "Installs AI Agent rules, skills, and workflows from the current directory."
+            echo "Installs AI Agent skills and workflows from the current directory."
             echo ""
             echo "Arguments:"
             echo "  AGENT             Which agent format to target: antigravity, antigravity-ide, or opencode (default: antigravity)."
             echo "  SCOPE             Installation scope: global (default) or workspace."
             echo ""
             echo "Options:"
-            echo "  --rules=<rules>   Comma-separated list of rule names to install. Defaults to 'all'."
             echo "  --path=<path>     Specific location to install into when SCOPE is workspace."
             echo "  --plugin-name=<n> Name of the plugin bundle (default: baseline-everything)."
             echo "  -h, --help        Show this help message and exit."
@@ -49,12 +45,19 @@ if [ "$SCOPE" = "workspace" ]; then
     fi
 
     case $AGENT in
-        antigravity|antigravity-ide)
+        antigravity)
             BASE_DIR="${PREFIX}.agents/plugins/$PLUGIN_NAME"
-            TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             TARGET_WORKFLOWS="$BASE_DIR/workflows"
-            LEGACY_RULES="${PREFIX}.agents/rules"
+            LEGACY_SKILLS="${PREFIX}.agents/skills"
+            LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
+            ;;
+        antigravity-ide)
+            BASE_DIR="${PREFIX}.agents/plugins/$PLUGIN_NAME"
+            TARGET_SKILLS="$BASE_DIR/skills"
+            TARGET_WORKFLOWS="$BASE_DIR/workflows"
+            DIRECT_WORKSPACE_SKILLS="${PREFIX}.agents/skills"
+            DIRECT_WORKSPACE_WORKFLOWS="${PREFIX}.agents/workflows"
             LEGACY_SKILLS="${PREFIX}.agents/skills"
             LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
             ;;
@@ -68,25 +71,19 @@ else
     case $AGENT in
         antigravity)
             BASE_DIR="$HOME/.gemini/antigravity-cli/plugins/$PLUGIN_NAME"
-            TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             TARGET_WORKFLOWS="$BASE_DIR/workflows"
-            DIRECT_GLOBAL_RULES="$HOME/.gemini/antigravity-cli/rules"
             DIRECT_GLOBAL_SKILLS="$HOME/.gemini/antigravity-cli/skills"
             DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/antigravity-cli/workflows"
-            SHARED_RULES="$HOME/.gemini/rules"
             SHARED_SKILLS="$HOME/.gemini/skills"
             SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
         antigravity-ide)
             BASE_DIR="$HOME/.gemini/antigravity-ide/plugins/$PLUGIN_NAME"
-            TARGET_RULES="$BASE_DIR/rules"
             TARGET_SKILLS="$BASE_DIR/skills"
             TARGET_WORKFLOWS="$BASE_DIR/workflows"
-            DIRECT_GLOBAL_RULES="$HOME/.gemini/antigravity-ide/rules"
-            DIRECT_GLOBAL_SKILLS="$HOME/.gemini/antigravity-ide/skills"
-            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/antigravity-ide/workflows"
-            SHARED_RULES="$HOME/.gemini/rules"
+            DIRECT_GLOBAL_SKILLS="$HOME/.gemini/config/skills"
+            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/config/global_workflows"
             SHARED_SKILLS="$HOME/.gemini/skills"
             SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
@@ -100,9 +97,6 @@ fi
 
 # Create target directories
 mkdir -p "$BASE_DIR"
-if [ -n "$TARGET_RULES" ]; then
-    mkdir -p "$TARGET_RULES"
-fi
 if [ -n "$TARGET_SKILLS" ]; then
     mkdir -p "$TARGET_SKILLS"
 fi
@@ -110,68 +104,37 @@ if [ -n "$TARGET_WORKFLOWS" ]; then
     mkdir -p "$TARGET_WORKFLOWS"
 fi
 
-if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
-    mkdir -p "$LEGACY_RULES"
+if [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity" ]; then
     mkdir -p "$LEGACY_SKILLS"
     mkdir -p "$LEGACY_WORKFLOWS"
+elif [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity-ide" ]; then
+    mkdir -p "$LEGACY_SKILLS"
+    mkdir -p "$LEGACY_WORKFLOWS"
+    mkdir -p "$DIRECT_WORKSPACE_SKILLS" 2>/dev/null || true
+    mkdir -p "$DIRECT_WORKSPACE_WORKFLOWS" 2>/dev/null || true
 elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
-    mkdir -p "$SHARED_RULES" 2>/dev/null || true
     mkdir -p "$SHARED_SKILLS" 2>/dev/null || true
     mkdir -p "$SHARED_WORKFLOWS" 2>/dev/null || true
-    mkdir -p "$DIRECT_GLOBAL_RULES" 2>/dev/null || true
     mkdir -p "$DIRECT_GLOBAL_SKILLS" 2>/dev/null || true
     mkdir -p "$DIRECT_GLOBAL_WORKFLOWS" 2>/dev/null || true
-fi
-
-# Install Rules
-if [ -n "$TARGET_RULES" ] && [ -d "rules" ]; then
-    echo "[Packaging] Copying rules from ./rules to $TARGET_RULES..."
-    
-    # Helper to check if rule should be copied
-    should_copy_rule() {
-        local file_name="${1##*/}"
-        local base_name="${file_name%.*}"
-        
-        if [ "$AGENT" != "antigravity" ] && [ "$AGENT" != "antigravity-ide" ] && [ "$file_name" = "GEMINI.md" ]; then
-            return 1
-        fi
-        
-        if [ "$RULES" = "all" ]; then
-            return 0
-        fi
-        
-        IFS=','
-        for r in $RULES; do
-            if [ "$r" = "$file_name" ] || [ "$r" = "$base_name" ]; then
-                return 0
-            fi
-        done
-        return 1
-    }
-
-    find rules -type f -name "*.md" | while read -r rule_file; do
-        if should_copy_rule "$rule_file"; then
-            cp "$rule_file" "$TARGET_RULES/" 2>/dev/null || true
-            if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
-                cp "$rule_file" "$LEGACY_RULES/" 2>/dev/null || true
-            elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
-                cp "$rule_file" "$SHARED_RULES/" 2>/dev/null || true
-                cp "$rule_file" "$DIRECT_GLOBAL_RULES/" 2>/dev/null || true
-            fi
-        fi
-    done
-    
-    echo "[OK] Rules installed."
-elif [ -n "$TARGET_RULES" ]; then
-    echo "[Warning] No ./rules directory found."
 fi
 
 # Install Skills
 if [ -n "$TARGET_SKILLS" ] && [ -d "skills" ]; then
     echo "[Packaging] Copying skills from ./skills to $TARGET_SKILLS..."
     cp -r skills/* "$TARGET_SKILLS/" 2>/dev/null || true
-    if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+    if [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity" ]; then
         cp -r skills/* "$LEGACY_SKILLS/" 2>/dev/null || true
+    elif [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity-ide" ]; then
+        cp -r skills/* "$LEGACY_SKILLS/" 2>/dev/null || true
+        # Flatten each skills/<DirName>/SKILL.md -> .agents/skills/<DirName>.md
+        for skill_dir in skills/*/; do
+            skill_name=$(basename "$skill_dir")
+            skill_file="${skill_dir}SKILL.md"
+            if [ -f "$skill_file" ]; then
+                cp "$skill_file" "$DIRECT_WORKSPACE_SKILLS/${skill_name}.md" 2>/dev/null || true
+            fi
+        done
     elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
         cp -r skills/* "$SHARED_SKILLS/" 2>/dev/null || true
         cp -r skills/* "$DIRECT_GLOBAL_SKILLS/" 2>/dev/null || true
@@ -185,8 +148,11 @@ fi
 if [ -n "$TARGET_WORKFLOWS" ] && [ -d "workflows" ]; then
     echo "[Packaging] Copying workflows from ./workflows to $TARGET_WORKFLOWS..."
     cp -r workflows/* "$TARGET_WORKFLOWS/" 2>/dev/null || true
-    if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
+    if [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity" ]; then
         cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
+    elif [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity-ide" ]; then
+        cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
+        cp -r workflows/* "$DIRECT_WORKSPACE_WORKFLOWS/" 2>/dev/null || true
     elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
         cp -r workflows/* "$SHARED_WORKFLOWS/" 2>/dev/null || true
         cp -r workflows/* "$DIRECT_GLOBAL_WORKFLOWS/" 2>/dev/null || true
@@ -205,7 +171,7 @@ if [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; then
 {
   "name": "$PLUGIN_NAME",
   "version": "2.0.0",
-  "description": "Centralized rules, skills, and workflows for Antigravity"
+  "description": "Centralized skills and workflows for Antigravity"
 }
 EOF
     fi
