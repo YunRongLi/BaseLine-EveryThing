@@ -1,3 +1,8 @@
+---
+name: Obsidian-Workflow
+description: Obsidian Workflow
+---
+
 # Obsidian Automation Workflow (CLI-Focused)
 
 This workflow defines the standard process for integrating the AI Agent (Antigravity) with a local Obsidian vault, utilizing the `obsidian-cli` tool and the Python scripts provided in the `obsidian-cli` global skill.
