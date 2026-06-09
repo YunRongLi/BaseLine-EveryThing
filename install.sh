@@ -8,7 +8,7 @@ PLUGIN_NAME="baseline-everything"
 # Parse arguments
 while [ $# -gt 0 ]; do
     case $1 in
-        antigravity|antigravity-ide|copilot|claude) AGENT="$1" ;;
+        antigravity|antigravity-ide|opencode) AGENT="$1" ;;
         global|workspace) SCOPE="$1" ;;
         --rule=*|--rules=*) RULES="${1#*=}" ;;
         --rule|--rules) RULES="$2"; shift ;;
@@ -22,7 +22,7 @@ while [ $# -gt 0 ]; do
             echo "Installs AI Agent rules, skills, and workflows from the current directory."
             echo ""
             echo "Arguments:"
-            echo "  AGENT             Which agent format to target: antigravity, antigravity-ide, copilot, or claude (default: antigravity)."
+            echo "  AGENT             Which agent format to target: antigravity, antigravity-ide, or opencode (default: antigravity)."
             echo "  SCOPE             Installation scope: global (default) or workspace."
             echo ""
             echo "Options:"
@@ -31,6 +31,10 @@ while [ $# -gt 0 ]; do
             echo "  --plugin-name=<n> Name of the plugin bundle (default: baseline-everything)."
             echo "  -h, --help        Show this help message and exit."
             exit 0
+            ;;
+        *)
+            echo "Error: Unknown argument '$1'"
+            exit 1
             ;;
     esac
     shift
@@ -54,17 +58,9 @@ if [ "$SCOPE" = "workspace" ]; then
             LEGACY_SKILLS="${PREFIX}.agents/skills"
             LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
             ;;
-        copilot)
-            BASE_DIR="${PREFIX}.github"
-            TARGET_RULES="$BASE_DIR"
+        opencode)
+            BASE_DIR="${PREFIX}.opencode"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
-            ;;
-        claude)
-            BASE_DIR="${PREFIX}.claude"
-            TARGET_RULES="$BASE_DIR/rules"
-            TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
     esac
     echo "[Building] Installing for $AGENT into Workspace: $BASE_DIR"
@@ -94,17 +90,9 @@ else
             SHARED_SKILLS="$HOME/.gemini/skills"
             SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
-        copilot)
-            BASE_DIR="$HOME/.copilot"
-            TARGET_RULES="$BASE_DIR"
+        opencode)
+            BASE_DIR="$HOME/.config/opencode"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
-            ;;
-        claude)
-            BASE_DIR="$HOME/.claude"
-            TARGET_RULES="$BASE_DIR/rules"
-            TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             ;;
     esac
     echo "[Global] Installing for $AGENT into Global: $BASE_DIR"
@@ -112,9 +100,16 @@ fi
 
 # Create target directories
 mkdir -p "$BASE_DIR"
-mkdir -p "$TARGET_RULES"
-mkdir -p "$TARGET_SKILLS"
-mkdir -p "$TARGET_WORKFLOWS"
+if [ -n "$TARGET_RULES" ]; then
+    mkdir -p "$TARGET_RULES"
+fi
+if [ -n "$TARGET_SKILLS" ]; then
+    mkdir -p "$TARGET_SKILLS"
+fi
+if [ -n "$TARGET_WORKFLOWS" ]; then
+    mkdir -p "$TARGET_WORKFLOWS"
+fi
+
 if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
     mkdir -p "$LEGACY_RULES"
     mkdir -p "$LEGACY_SKILLS"
@@ -129,7 +124,7 @@ elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "
 fi
 
 # Install Rules
-if [ -d "rules" ]; then
+if [ -n "$TARGET_RULES" ] && [ -d "rules" ]; then
     echo "[Packaging] Copying rules from ./rules to $TARGET_RULES..."
     
     # Helper to check if rule should be copied
@@ -167,12 +162,12 @@ if [ -d "rules" ]; then
     done
     
     echo "[OK] Rules installed."
-else
+elif [ -n "$TARGET_RULES" ]; then
     echo "[Warning] No ./rules directory found."
 fi
 
 # Install Skills
-if [ -d "skills" ]; then
+if [ -n "$TARGET_SKILLS" ] && [ -d "skills" ]; then
     echo "[Packaging] Copying skills from ./skills to $TARGET_SKILLS..."
     cp -r skills/* "$TARGET_SKILLS/" 2>/dev/null || true
     if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
@@ -182,12 +177,12 @@ if [ -d "skills" ]; then
         cp -r skills/* "$DIRECT_GLOBAL_SKILLS/" 2>/dev/null || true
     fi
     echo "[OK] Skills installed."
-else
+elif [ -n "$TARGET_SKILLS" ]; then
     echo "[Info] No ./skills directory found."
 fi
 
 # Install Workflows
-if [ -d "workflows" ]; then
+if [ -n "$TARGET_WORKFLOWS" ] && [ -d "workflows" ]; then
     echo "[Packaging] Copying workflows from ./workflows to $TARGET_WORKFLOWS..."
     cp -r workflows/* "$TARGET_WORKFLOWS/" 2>/dev/null || true
     if [ "$SCOPE" = "workspace" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
@@ -197,7 +192,7 @@ if [ -d "workflows" ]; then
         cp -r workflows/* "$DIRECT_GLOBAL_WORKFLOWS/" 2>/dev/null || true
     fi
     echo "[OK] Workflows installed."
-else
+elif [ -n "$TARGET_WORKFLOWS" ]; then
     echo "[Info] No ./workflows directory found."
 fi
 

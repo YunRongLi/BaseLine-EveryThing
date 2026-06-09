@@ -7,7 +7,7 @@
     the target directory corresponding to the specified AI Agent and Scope.
 
 .PARAMETER Agent
-    Which agent format to target: antigravity (default), copilot, or claude.
+    Which agent format to target: antigravity (default), antigravity-ide, or opencode.
 
 .PARAMETER Scope
     Installation scope: global (default) or workspace.
@@ -28,7 +28,7 @@
 #>
 [CmdletBinding()]
 param (
-    [ValidateSet("antigravity", "antigravity-ide", "copilot", "claude")]
+    [ValidateSet("antigravity", "antigravity-ide", "opencode")]
     [string]$Agent = "antigravity",
     
     [ValidateSet("global", "workspace")]
@@ -63,17 +63,9 @@ if ($Scope -eq "workspace") {
             $LegacySkillsDir = Join-Path $WorkspaceRoot ".agents\skills"
             $LegacyWorkflowsDir = Join-Path $WorkspaceRoot ".agents\workflows"
         }
-        "copilot" {
-            $BaseDir = Join-Path $WorkspaceRoot ".github"
-            $TargetRules = $BaseDir  # Copilot instructions usually go in .github/
+        "opencode" {
+            $BaseDir = Join-Path $WorkspaceRoot ".opencode"
             $TargetSkills = Join-Path $BaseDir "skills"
-            $TargetWorkflows = Join-Path $BaseDir "workflows"
-        }
-        "claude" {
-            $BaseDir = Join-Path $WorkspaceRoot ".claude"
-            $TargetRules = Join-Path $BaseDir "rules"
-            $TargetSkills = Join-Path $BaseDir "skills"
-            $TargetWorkflows = Join-Path $BaseDir "workflows"
         }
     }
     Write-Host "[Building] Installing for $Agent into Workspace: $BaseDir" -ForegroundColor Cyan
@@ -103,17 +95,9 @@ if ($Scope -eq "workspace") {
             $SharedSkills = Join-Path $HOME ".gemini\skills"
             $SharedWorkflows = Join-Path $HOME ".gemini\workflows"
         }
-        "copilot" {
-            $BaseDir = Join-Path $HOME ".copilot"
-            $TargetRules = $BaseDir
+        "opencode" {
+            $BaseDir = Join-Path $HOME ".config\opencode"
             $TargetSkills = Join-Path $BaseDir "skills"
-            $TargetWorkflows = Join-Path $BaseDir "workflows"
-        }
-        "claude" {
-            $BaseDir = Join-Path $HOME ".claude"
-            $TargetRules = Join-Path $BaseDir "rules"
-            $TargetSkills = Join-Path $BaseDir "skills"
-            $TargetWorkflows = Join-Path $BaseDir "workflows"
         }
     }
     Write-Host "[Global] Installing for $Agent into Global: $BaseDir" -ForegroundColor Cyan
@@ -123,13 +107,13 @@ if ($Scope -eq "workspace") {
 if (-not (Test-Path $BaseDir)) {
     New-Item -ItemType Directory -Path $BaseDir -Force | Out-Null
 }
-if (-not (Test-Path $TargetRules)) {
+if ($TargetRules -and -not (Test-Path $TargetRules)) {
     New-Item -ItemType Directory -Path $TargetRules -Force | Out-Null
 }
-if (-not (Test-Path $TargetSkills)) {
+if ($TargetSkills -and -not (Test-Path $TargetSkills)) {
     New-Item -ItemType Directory -Path $TargetSkills -Force | Out-Null
 }
-if (-not (Test-Path $TargetWorkflows)) {
+if ($TargetWorkflows -and -not (Test-Path $TargetWorkflows)) {
     New-Item -ItemType Directory -Path $TargetWorkflows -Force | Out-Null
 }
 if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
@@ -151,7 +135,7 @@ if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigr
 }
 
 # Install Rules
-if (Test-Path "rules") {
+if ($TargetRules -and (Test-Path "rules")) {
     # For other agents or workspace scope, copy everything except GEMINI.md (unless it's antigravity workspace)
     $ExcludeList = @()
     if ($Agent -ne "antigravity" -and $Agent -ne "antigravity-ide") {
@@ -172,12 +156,12 @@ if (Test-Path "rules") {
         }
     }
     Write-Host "[OK] Rules installed." -ForegroundColor Green
-} else {
+} elseif ($TargetRules) {
     Write-Host "[Warning] No .\rules directory found." -ForegroundColor DarkYellow
 }
 
 # Install Skills
-if (Test-Path "skills") {
+if ($TargetSkills -and (Test-Path "skills")) {
     Write-Host "[Packaging] Copying skills from .\skills to $TargetSkills..." -ForegroundColor Yellow
     Copy-Item -Path "skills\*" -Destination $TargetSkills -Recurse -Force -ErrorAction SilentlyContinue
     if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
@@ -187,12 +171,12 @@ if (Test-Path "skills") {
         Copy-Item -Path "skills\*" -Destination $DirectGlobalSkills -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "[OK] Skills installed." -ForegroundColor Green
-} else {
+} elseif ($TargetSkills) {
     Write-Host "[Info] No .\skills directory found." -ForegroundColor Blue
 }
 
 # Install Workflows
-if (Test-Path "workflows") {
+if ($TargetWorkflows -and (Test-Path "workflows")) {
     Write-Host "[Packaging] Copying workflows from .\workflows to $TargetWorkflows..." -ForegroundColor Yellow
     Copy-Item -Path "workflows\*" -Destination $TargetWorkflows -Recurse -Force -ErrorAction SilentlyContinue
     if ($Scope -eq "workspace" -and ($Agent -eq "antigravity" -or $Agent -eq "antigravity-ide")) {
@@ -202,7 +186,7 @@ if (Test-Path "workflows") {
         Copy-Item -Path "workflows\*" -Destination $DirectGlobalWorkflows -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "[OK] Workflows installed." -ForegroundColor Green
-} else {
+} elseif ($TargetWorkflows) {
     Write-Host "[Info] No .\workflows directory found." -ForegroundColor Blue
 }
 
