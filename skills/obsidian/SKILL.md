@@ -1,4 +1,5 @@
 ---
+name: obsidian
 trigger: glob
 globs: "**/*.{md,canvas,base}"
 description: Guidelines for managing Obsidian-flavored Markdown, JSON Canvas, and Obsidian Bases files. Use when creating, editing, or organizing notes and visual diagrams within an Obsidian vault.

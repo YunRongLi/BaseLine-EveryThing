@@ -1,6 +1,8 @@
 ---
+name: c-programming-guideline
 trigger: glob
 globs: "**/*.{c,h}"
+description: Guidelines for C programming. Focuses on architecture, interfaces, resource management, and error handling for C development.
 ---
 > [!IMPORTANT]
 > These guidelines are strictly for C development. ONLY apply these rules when modifying or reviewing `.c` or `.h` files. If the current task involves other file types, disregard this entire document.

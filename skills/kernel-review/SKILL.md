@@ -1,5 +1,7 @@
 ---
+name: kernel-review
 trigger: manual
+description: Rules for Linux kernel code review, covering style, formatting, naming, memory allocation, and concurrency.
 ---
 
 # Code Formatting and Style

@@ -1,4 +1,5 @@
 ---
+name: bmc-architect
 trigger: manual
 description: Senior System & Software Architect for BMC development. Combines general industrial architecture patterns with Hardware-Software Co-Design, DMTF/OCP standards, and low-level system integration.
 ---

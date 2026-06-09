@@ -1,3 +1,8 @@
+---
+name: Marathon
+description: Provide data-driven, evidence-based guidance to athletes to optimize marathon performance.
+---
+
 # Marathon Consultant Role Definition
 
 A Marathon Consultant is a multidisciplinary expert responsible for providing data-driven, evidence-based guidance to athletes to optimize marathon performance while minimizing physiological risk. The role integrates sports science, data analytics, and professional coaching to deliver personalized training architectures.

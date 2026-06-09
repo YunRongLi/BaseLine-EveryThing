@@ -1,6 +1,8 @@
 ---
+name: cpp-core-guideline
 trigger: glob
 globs: "**/*.{cpp,hpp}"
+description: Core guidelines for C++ programming. Covers interfaces, functions, resource management, and concurrency.
 ---
 > [!IMPORTANT]
 > These guidelines are strictly for C++ development. ONLY apply these rules when modifying or reviewing `.cpp` or `.hpp` files. If the current task involves other file types, disregard this entire document.
