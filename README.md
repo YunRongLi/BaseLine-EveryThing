@@ -23,7 +23,8 @@ A centralized repository for managing rules, skills, and workflows across multip
 │   ├── html-effectiveness/
 │   ├── kernel-review/
 │   ├── Marathon/
-│   └── obsidian/       # Document and vault standards
+│   ├── obsidian/       # Document and vault standards
+│   └── security-review/ # CWE-699 security code review guidelines
 ├── workflows/          # Standardized operational workflows (e.g., git)
 ├── install.ps1         # Windows installer
 └── install.sh          # Linux/macOS installer
