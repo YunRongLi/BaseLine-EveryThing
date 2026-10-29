@@ -8,7 +8,7 @@ function show_help() {
     echo ""
     echo "Options:"
     echo "  -w, --workspace    Install to Workspace (~/.agents/skills/{skill_name}/)"
-    echo "  -g, --global       Install to Global (~/.gemini/antigravity-cli/skills/{skill_name}/)"
+    echo "  -g, --global       Install to Global (~/.gemini/config/skills/{skill_name}/)"
     echo "  -s, --shared       Install to Shared (~/.gemini/skills/{skill_name}/)"
     echo "  -h, --help         Show this help message"
     echo ""
@@ -81,7 +81,7 @@ case $LOCATION in
         DEST_DIR=~/.agents/skills/$SKILL_NAME
         ;;
     global)
-        DEST_DIR=~/.gemini/antigravity-cli/skills/$SKILL_NAME
+        DEST_DIR=~/.gemini/config/skills/$SKILL_NAME
         ;;
     shared)
         DEST_DIR=~/.gemini/skills/$SKILL_NAME
