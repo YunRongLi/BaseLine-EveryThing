@@ -107,6 +107,21 @@ The 40 weakness categories under CWE-699 are indexed below and detailed within t
 
 ---
 
+## OCP Datacenter Firmware and Hardware Security (OCP-SAFE)
+
+When reviewing data center platform hardware, firmware, or management subsystems (OpenBMC, host BIOS, Root-of-Trust controllers, CPLDs, and peripheral microcontrollers), conduct audits in alignment with OCP Security and OCP-SAFE standards:
+
+* Detailed Reference: [ocp-firmware-and-hardware-security.md](references/ocp-firmware-and-hardware-security.md)
+
+### Key OCP Assessment Dimensions
+* 4-Part Threat Model: Verify the mandatory presence of Security Objectives, Adversarial Model, Attack Surface Enumeration, and Critical Assets.
+* Scope 1 Firmware Code Review: Whitebox inspection of boot ROM and mutable firmware for memory safety, cryptographic sanity, zero hardcoded secrets, and JTAG/debug port disablement in production.
+* Platform Firmware Resiliency: Verify NIST SP 800-193 protection, detection, recovery, and monotonic anti-rollback counter enforcement.
+* Attestation and Identity: Verify DICE / 802.1AR silicon identity and DMTF SPDM attestation support.
+* Finding Attribution: Map findings to explicit CWE IDs (e.g., CWE-1274 for RoT failure, CWE-1338 for hardware endpoint access, CWE-1256 for exposed debug interfaces, CWE-1218 for driver memory corruption) and include CVSS / JIL ratings.
+
+---
+
 ## Core Defensive Principles
 
 1. Fail-Closed Defaults: When encountering an unexpected condition or error, reject the request, revoke access, and abort safely.
