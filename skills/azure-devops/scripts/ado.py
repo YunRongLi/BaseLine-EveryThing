@@ -109,8 +109,6 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
         projects_to_query = []
         if args.project:
             projects_to_query = [args.project]
-        elif creator_id:
-            projects_to_query = [None]
         elif config.projects:
             projects_to_query = list(config.projects)
         elif config.project:
