@@ -153,9 +153,7 @@ class PullRequestService:
             params["$top"] = top
 
         original_project = self.client.project
-        if project:
-            self.client.project = project
-
+        self.client.project = project
         try:
             scoped = bool(self.client.project)
             data = self.client.get(endpoint, scoped_to_project=scoped, params=params)
