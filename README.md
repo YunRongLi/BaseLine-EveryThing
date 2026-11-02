@@ -5,7 +5,7 @@ A centralized repository for managing rules, skills, and workflows across multip
 ## Features
 
 - **Multi-Agent Support**: Unified configuration for Antigravity, GitHub Copilot, and Claude Code.
-- **Rules Management**: Centralized storage for architectural standards, coding guidelines, and document conventions (e.g., Obsidian).
+- **Rules Management**: Centralized storage for architectural standards, coding guidelines, and document conventions.
 - **Workflow Automation**: Standardized processes for common tasks like git operations.
 - **Cross-Platform Installers**: Robust installation scripts for both Windows (PowerShell) and Linux/macOS (Bash).
 
@@ -23,7 +23,6 @@ A centralized repository for managing rules, skills, and workflows across multip
 │   ├── html-effectiveness/
 │   ├── kernel-review/
 │   ├── Marathon/
-│   ├── obsidian/       # Document and vault standards
 │   └── security-review/ # CWE-699 security code review guidelines
 ├── workflows/          # Standardized operational workflows (e.g., git)
 ├── install.ps1         # Windows installer
