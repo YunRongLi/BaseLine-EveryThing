@@ -92,6 +92,18 @@ class PullRequest:
 
         return False
 
+    def has_reviewer(self, pattern: str) -> bool:
+        if not pattern:
+            return True
+        p = pattern.strip().lower()
+        for rev in self.reviewers:
+            display_name = str(rev.get("displayName", "")).lower()
+            unique_name = str(rev.get("uniqueName", "")).lower()
+            rev_id = str(rev.get("id", "")).lower()
+            if p in display_name or p in unique_name or p == rev_id:
+                return True
+        return False
+
 
 class PullRequestService:
     """
@@ -116,6 +128,13 @@ class PullRequestService:
         except Exception:
             return None
 
+    def get_current_user_id(self) -> Optional[str]:
+        """
+        Returns the GUID identifier for the authenticated user.
+        """
+        user = self.get_current_user()
+        return user.get("id") if user else None
+
     def get_pull_request(
         self,
         pr_id: int,
@@ -139,16 +158,19 @@ class PullRequestService:
         self,
         project: Optional[str] = None,
         creator_id: Optional[str] = None,
+        reviewer_id: Optional[str] = None,
         status: str = "active",
         top: Optional[int] = None,
     ) -> List[PullRequest]:
         """
-        Lists pull requests filtered by project, status, and creator.
+        Lists pull requests filtered by project, status, creator, and/or reviewer.
         """
         endpoint = "git/pullrequests"
         params: Dict[str, Any] = {"searchCriteria.status": status}
         if creator_id:
             params["searchCriteria.creatorId"] = creator_id
+        if reviewer_id:
+            params["searchCriteria.reviewerId"] = reviewer_id
         if top:
             params["$top"] = top
 

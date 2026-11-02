@@ -3,8 +3,8 @@
 ## Authentication Mechanism
 Authentication is performed exclusively via Azure CLI OAuth 2.0 Bearer tokens.
 
-- **Resource ID**: `499b84ac-1321-427f-aa17-267ca6975798`
-- **CLI Command**: `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --output json`
+- **Resource Identifier**: Configurable application resource identifier (via profile setting or `ADO_RESOURCE_ID` environment variable).
+- **CLI Command**: `az account get-access-token --resource <resource_id> --output json`
 - **Headers**:
   ```http
   Authorization: Bearer <access_token>
@@ -22,6 +22,7 @@ Authentication is performed exclusively via Azure CLI OAuth 2.0 Bearer tokens.
 ### 2. Pull Requests
 - **List PRs**: `GET {org}/{project}/_apis/git/pullrequests?searchCriteria.status=active&api-version=7.0`
 - **List PRs by Creator**: `GET {org}/_apis/git/pullrequests?searchCriteria.creatorId={creator_id}&searchCriteria.status=active&api-version=7.0`
+- **List PRs by Reviewer**: `GET {org}/_apis/git/pullrequests?searchCriteria.reviewerId={reviewer_id}&searchCriteria.status=active&api-version=7.0`
 - **Get PR**: `GET {org}/_apis/git/pullrequests/{pr_id}?api-version=7.0`
 - **Get PR Threads**: `GET {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/threads?api-version=7.0`
 - **Post Reply to Thread**:
@@ -55,4 +56,3 @@ Authentication is performed exclusively via Azure CLI OAuth 2.0 Bearer tokens.
     ```
 - **Download Attachment**:
   - Stream directly from attachment URL (`relation.rel == "AttachedFile"`), passing `Authorization: Bearer <token>` in headers.
-

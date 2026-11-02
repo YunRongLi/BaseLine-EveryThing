@@ -11,10 +11,10 @@ from typing import Any, Dict, List, Optional
 
 try:
     from .pull_requests import PullRequest, PRThread, PRComment
-    from .work_items import WorkItem, WorkItemAttachment
+    from .work_items import WorkItem, WorkItemAttachment, WorkItemComment, RelatedWorkItem
 except ImportError:
     from pull_requests import PullRequest, PRThread, PRComment
-    from work_items import WorkItem, WorkItemAttachment
+    from work_items import WorkItem, WorkItemAttachment, WorkItemComment, RelatedWorkItem
 
 
 def strip_html(html_str: str) -> str:
@@ -31,10 +31,15 @@ def strip_html(html_str: str) -> str:
 
 class PRTerminalFormatter:
     @staticmethod
-    def format_pr_list(pull_requests: List[PullRequest], author_filter: Optional[str] = None) -> str:
+    def format_pr_list(
+        pull_requests: List[PullRequest],
+        author_filter: Optional[str] = None,
+        filter_desc: Optional[str] = None,
+    ) -> str:
         if not pull_requests:
-            if author_filter:
-                return f"No active pull requests found for author '{author_filter}'."
+            desc = filter_desc or (f"for author '{author_filter}'" if author_filter else "")
+            if desc:
+                return f"No active pull requests found {desc}."
             return "No active pull requests found."
 
         lines = []
@@ -197,6 +202,15 @@ class WITerminalFormatter:
         if item.web_url:
             lines.append(f"Web URL     : {item.web_url}")
 
+        if item.related_items:
+            lines.append(f"\nRelated Work Items ({len(item.related_items)}):")
+            for r in item.related_items:
+                lines.append(
+                    f"  - [{r.relation_name}] #{r.id} ({r.work_item_type}, {r.state}): {r.title}"
+                )
+                if r.web_url:
+                    lines.append(f"    Link: {r.web_url}")
+
         lines.append(f"\nAttachments : {len(item.attachments)}")
         for att in item.attachments:
             lines.append(f"  - {att.name} ({att.url})")
@@ -212,6 +226,16 @@ class WITerminalFormatter:
             lines.append("\nRepro Steps:")
             for l in cleaned_repro.splitlines():
                 lines.append(f"  {l}")
+
+        if item.comments:
+            lines.append(f"\nDiscussion & Comments ({len(item.comments)}):")
+            lines.append("-" * 60)
+            for c in item.comments:
+                lines.append(f"  Author: {c.author} ({c.published_date})")
+                cleaned_text = strip_html(c.text)
+                for l in cleaned_text.splitlines():
+                    lines.append(f"    {l}")
+                lines.append("")
 
         lines.append("=" * 80)
         return "\n".join(lines)
@@ -239,11 +263,19 @@ class WIAgentMarkdownReporter:
         lines.append("")
 
         lines.append("## Instructions for AI Agent")
-        lines.append("1. Examine the defect description and repro steps below.")
+        lines.append("1. Examine the defect description, repro steps, related items, and comments below.")
         lines.append("2. Inspect or download referenced attachments (logs, dumps) if available.")
         lines.append("3. Formulate root cause hypotheses and identify affected components.")
         lines.append("4. Propose a technical fix or triage draft adhering to system guidelines.")
         lines.append("")
+
+        if item.related_items:
+            lines.append(f"## Related Work Items ({len(item.related_items)})")
+            for r in item.related_items:
+                link_text = f"#{r.id} {r.title}"
+                link = f"[{link_text}]({r.web_url})" if r.web_url else f"`#{r.id} {r.title}`"
+                lines.append(f"- **{r.relation_name}**: {link} (`{r.work_item_type}`, `{r.state}`)")
+            lines.append("")
 
         cleaned_desc = strip_html(item.description)
         if cleaned_desc:
@@ -256,6 +288,15 @@ class WIAgentMarkdownReporter:
             lines.append("## Repro Steps")
             lines.append(cleaned_repro)
             lines.append("")
+
+        if item.comments:
+            lines.append(f"## Discussion & Comments ({len(item.comments)})")
+            for c in item.comments:
+                lines.append(f"### {c.author} ({c.published_date})")
+                cleaned_comment = strip_html(c.text)
+                for l in cleaned_comment.splitlines():
+                    lines.append(f"> {l}")
+                lines.append("")
 
         if item.attachments:
             lines.append(f"## Attachments ({len(item.attachments)})")

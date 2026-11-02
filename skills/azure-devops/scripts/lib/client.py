@@ -41,6 +41,8 @@ class AzureDevOpsClient:
         clean_org = organization.strip().rstrip("/")
         if not clean_org.startswith("http"):
             clean_org = f"https://dev.azure.com/{clean_org}"
+        if not clean_org.startswith("https://"):
+            raise ValueError("Insecure transport rejected: Azure DevOps organization URL must use HTTPS.")
         self.organization = clean_org
         self.project = project.strip() if project else None
         self.auth_provider = auth_provider or AzureCliAuthProvider()

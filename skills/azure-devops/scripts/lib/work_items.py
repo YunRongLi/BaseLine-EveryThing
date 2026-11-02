@@ -25,6 +25,24 @@ class WorkItemAttachment:
 
 
 @dataclass
+class WorkItemComment:
+    id: int
+    author: str
+    published_date: str
+    text: str
+
+
+@dataclass
+class RelatedWorkItem:
+    id: int
+    relation_name: str
+    title: str = ""
+    work_item_type: str = ""
+    state: str = ""
+    web_url: str = ""
+
+
+@dataclass
 class WorkItem:
     id: int
     title: str
@@ -36,6 +54,8 @@ class WorkItem:
     assigned_to: str = ""
     tags: List[str] = field(default_factory=list)
     attachments: List[WorkItemAttachment] = field(default_factory=list)
+    comments: List[WorkItemComment] = field(default_factory=list)
+    related_items: List[RelatedWorkItem] = field(default_factory=list)
     raw_fields: Dict[str, Any] = field(default_factory=dict)
     web_url: str = ""
 
@@ -48,9 +68,40 @@ class WorkItemService:
     def __init__(self, client: AzureDevOpsClient):
         self.client = client
 
-    def get_work_item(self, work_item_id: int) -> WorkItem:
+    def get_comments(self, work_item_id: int, top: int = 50) -> List[WorkItemComment]:
         """
-        Retrieves complete work item details including attachments and relations.
+        Retrieves discussion comments for a work item.
+        """
+        endpoint = f"wit/workitems/{work_item_id}/comments"
+        params = {"api-version": "7.0-preview.3", "$top": top, "order": "asc"}
+        try:
+            data = self.client.get(endpoint, params=params)
+        except Exception:
+            return []
+
+        raw_comments = data.get("comments", []) if isinstance(data, dict) else []
+        result: List[WorkItemComment] = []
+        for c in raw_comments:
+            cid = c.get("id", 0)
+            text = c.get("text", "")
+            created_by = c.get("createdBy", {})
+            author = (
+                created_by.get("displayName")
+                or created_by.get("uniqueName")
+                or "Unknown"
+            )
+            created_date = c.get("createdDate", "")
+            result.append(WorkItemComment(id=cid, author=author, published_date=created_date, text=text))
+        return result
+
+    def get_work_item(
+        self,
+        work_item_id: int,
+        include_comments: bool = True,
+        include_relations: bool = True,
+    ) -> WorkItem:
+        """
+        Retrieves complete work item details including attachments, relations, and comments.
         """
         endpoint = f"wit/workitems/{work_item_id}"
         data = self.client.get(endpoint, params={"$expand": "all"})
@@ -69,16 +120,79 @@ class WorkItemService:
         tags_raw = fields.get("System.Tags", "")
         tags = [t.strip() for t in tags_raw.split(";") if t.strip()]
 
-        # Parse relations to discover attached files
+        # Parse relations to discover attached files and related work items
         attachments: List[WorkItemAttachment] = []
-        relations = data.get("relations", [])
+        related_refs: List[Dict[str, Any]] = []
+        relations = data.get("relations", []) or []
         for rel in relations:
-            if rel.get("rel") == "AttachedFile":
-                url = rel.get("url", "")
-                attributes = rel.get("attributes", {})
+            rel_type = rel.get("rel", "")
+            url = rel.get("url", "")
+            attributes = rel.get("attributes", {})
+            if rel_type == "AttachedFile":
                 name = attributes.get("name", "attachment")
                 attachments.append(WorkItemAttachment(url=url, name=name, attributes=attributes))
+            elif "workItems" in url or "workitems" in url:
+                target_id_str = url.rstrip("/").split("/")[-1]
+                if target_id_str.isdigit():
+                    rel_name = attributes.get("name") or rel_type.split(".")[-1]
+                    related_refs.append({
+                        "id": int(target_id_str),
+                        "name": rel_name,
+                        "url": url,
+                    })
 
+        # Batch resolve related work items metadata
+        related_items: List[RelatedWorkItem] = []
+        if include_relations and related_refs:
+            ids_to_fetch = [r["id"] for r in related_refs]
+            id_info_map: Dict[int, Dict[str, str]] = {}
+            chunk_size = 50
+            for i in range(0, len(ids_to_fetch), chunk_size):
+                chunk = ids_to_fetch[i : i + chunk_size]
+                ids_str = ",".join(str(wid) for wid in chunk)
+                try:
+                    res = self.client.get(
+                        "wit/workitems",
+                        params={
+                            "ids": ids_str,
+                            "fields": "System.Id,System.Title,System.WorkItemType,System.State",
+                            "$expand": "none",
+                        },
+                        scoped_to_project=False,
+                    )
+                    items_data = res.get("value", []) if isinstance(res, dict) else []
+                    for item_d in items_data:
+                        wid = item_d.get("id")
+                        f = item_d.get("fields", {})
+                        w_url = item_d.get("_links", {}).get("html", {}).get("href", "")
+                        id_info_map[wid] = {
+                            "title": f.get("System.Title", f"Work Item #{wid}"),
+                            "type": f.get("System.WorkItemType", "Unknown"),
+                            "state": f.get("System.State", "Unknown"),
+                            "url": w_url or f"{self.client.organization}/_workitems/edit/{wid}",
+                        }
+                except Exception:
+                    pass
+
+            for ref in related_refs:
+                wid = ref["id"]
+                info = id_info_map.get(wid, {})
+                rtitle = info.get("title", f"Work Item #{wid}")
+                rtype = info.get("type", "Unknown")
+                rstate = info.get("state", "Unknown")
+                rurl = info.get("url") or f"{self.client.organization}/_workitems/edit/{wid}"
+                related_items.append(
+                    RelatedWorkItem(
+                        id=wid,
+                        relation_name=ref["name"],
+                        title=rtitle,
+                        work_item_type=rtype,
+                        state=rstate,
+                        web_url=rurl,
+                    )
+                )
+
+        comments = self.get_comments(work_item_id) if include_comments else []
         web_url = data.get("_links", {}).get("html", {}).get("href", "")
 
         return WorkItem(
@@ -92,19 +206,34 @@ class WorkItemService:
             assigned_to=assigned_to,
             tags=tags,
             attachments=attachments,
+            comments=comments,
+            related_items=related_items,
             raw_fields=fields,
             web_url=web_url,
         )
 
-    def list_my_work_items(self, project: Optional[str] = None, top: int = 25) -> List[WorkItem]:
+    def list_my_work_items(
+        self,
+        project: Optional[str] = None,
+        item_type: Optional[str] = None,
+        top: int = 25,
+    ) -> List[WorkItem]:
         """
         Queries active work items assigned to the authenticated user using WIQL.
         """
+        conditions = [
+            "[System.AssignedTo] = @Me",
+            "[System.State] NOT IN ('Closed', 'Resolved', 'Cut', 'Completed', 'Done')",
+        ]
+        if item_type:
+            sanitized_type = item_type.replace("'", "''")
+            conditions.append(f"[System.WorkItemType] = '{sanitized_type}'")
+
+        where_clause = " AND ".join(conditions)
         wiql = (
-            "SELECT [System.Id] FROM WorkItems "
-            "WHERE [System.AssignedTo] = @Me "
-            "AND [System.State] NOT IN ('Closed', 'Resolved', 'Cut', 'Completed', 'Done') "
-            "ORDER BY [System.ChangedDate] DESC"
+            f"SELECT [System.Id] FROM WorkItems "
+            f"WHERE {where_clause} "
+            f"ORDER BY [System.ChangedDate] DESC"
         )
         endpoint = "wit/wiql"
         original_project = self.client.project

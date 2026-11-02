@@ -3,6 +3,7 @@
 Azure DevOps CLI Tool for AI Agents and Engineers.
 Authentication strictly uses Azure CLI ('az login') OAuth 2.0 Bearer tokens (Zero-PAT policy).
 Adheres strictly to no-icons and no-emojis output rules.
+Supports multi-profile, multi-domain environments and assigned reviewer filtering.
 """
 
 import argparse
@@ -20,7 +21,7 @@ if str(LIB_DIR) not in sys.path:
 
 from lib.auth import AzureCliAuthProvider
 from lib.client import AzureDevOpsClient
-from lib.config import ToolConfig
+from lib.config import ProfileConfig, ToolConfig
 from lib.exceptions import AdoAuthError, AdoError, AdoNotFoundError
 from lib.formatter import (
     PRAgentMarkdownReporter,
@@ -32,20 +33,42 @@ from lib.pull_requests import PullRequestService
 from lib.work_items import WorkItemService
 
 
-def get_client(config: ToolConfig, org: Optional[str] = None, project: Optional[str] = None) -> AzureDevOpsClient:
-    target_org = org or config.organization
+def get_client(
+    config: ToolConfig,
+    org: Optional[str] = None,
+    project: Optional[str] = None,
+    profile_name: Optional[str] = None,
+) -> AzureDevOpsClient:
+    active_profile = config.get_active_profile(profile_override=profile_name, project_override=project)
+    target_org = org or active_profile.organization or config.organization
     if not target_org:
         print("Error: Azure DevOps organization is not configured.", file=sys.stderr)
-        print("Run 'python ado.py config --set organization=<URL>' or set ADO_ORGANIZATION env var.", file=sys.stderr)
+        print("Configure organization via 'ado config --set organization=<URL>' or set ADO_ORGANIZATION env var.", file=sys.stderr)
         sys.exit(1)
 
-    target_proj = project or config.project or None
-    auth_provider = AzureCliAuthProvider()
+    target_proj = project or active_profile.project or config.project or None
+    cfg_dir = active_profile.azure_config_dir or config.azure_config_dir or None
+    tenant = active_profile.tenant or config.tenant or None
+    resource_id = active_profile.resource_id or config.resource_id or None
+
+    auth_provider = AzureCliAuthProvider(
+        azure_config_dir=cfg_dir,
+        tenant=tenant,
+        resource_id=resource_id,
+    )
     return AzureDevOpsClient(organization=target_org, project=target_proj, auth_provider=auth_provider)
 
 
 def cmd_config(args: argparse.Namespace, config: ToolConfig) -> int:
+    profile_target = getattr(args, "profile", None)
+
     if args.set:
+        target_obj = config
+        if profile_target:
+            if profile_target not in config.profiles:
+                config.profiles[profile_target] = ProfileConfig()
+            target_obj = config.profiles[profile_target]
+
         for item in args.set:
             if "=" not in item:
                 print(f"Error: Invalid configuration format '{item}'. Use key=value.", file=sys.stderr)
@@ -54,12 +77,15 @@ def cmd_config(args: argparse.Namespace, config: ToolConfig) -> int:
             key = key.strip()
             val = val.strip()
 
-            if hasattr(config, key):
+            if hasattr(target_obj, key):
                 if key == "projects":
-                    config.projects = [p.strip() for p in val.split(",") if p.strip()]
+                    target_obj.projects = [p.strip() for p in val.split(",") if p.strip()]
                 else:
-                    setattr(config, key, val)
+                    setattr(target_obj, key, val)
                 print(f"Set {key} = {val}")
+            elif key == "active_profile":
+                config.active_profile = val
+                print(f"Set active_profile = {val}")
             else:
                 print(f"Error: Unknown configuration key '{key}'.", file=sys.stderr)
                 return 1
@@ -73,11 +99,17 @@ def cmd_config(args: argparse.Namespace, config: ToolConfig) -> int:
         return 0
 
     # Display configuration
+    resolved_profile = config.get_active_profile(profile_override=profile_target)
     print("Azure DevOps Skill Configuration:")
     print("-" * 50)
-    print(f"Organization    : {config.organization or '(Not configured)'}")
-    print(f"Default Project : {config.project or '(Not configured)'}")
-    print(f"Projects List   : {', '.join(config.projects) if config.projects else '(Empty)'}")
+    print(f"Active Profile  : {profile_target or config.active_profile}")
+    if config.profiles:
+        print(f"Available Profiles: {', '.join(config.profiles.keys())}")
+    print(f"Organization    : {resolved_profile.organization or config.organization or '(Not configured)'}")
+    print(f"Azure Config Dir: {resolved_profile.azure_config_dir or config.azure_config_dir or '(Default)'}")
+    print(f"Default Project : {resolved_profile.project or config.project or '(Not configured)'}")
+    projects_display = resolved_profile.projects or config.projects
+    print(f"Projects List   : {', '.join(projects_display) if projects_display else '(Empty)'}")
     print(f"Author / User   : {config.get_author() or '(Not detected)'}")
     print(f"Download Dir    : {config.download_dir}")
     print(f"Output Dir      : {config.output_dir}")
@@ -86,12 +118,16 @@ def cmd_config(args: argparse.Namespace, config: ToolConfig) -> int:
 
 
 def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
-    client = get_client(config, org=args.org, project=args.project)
+    profile_name = getattr(args, "profile", None)
+    active_profile = config.get_active_profile(profile_override=profile_name, project_override=args.project)
+    client = get_client(config, org=args.org, project=args.project, profile_name=profile_name)
     pr_service = PullRequestService(client)
 
     if args.list or not args.pr_id:
         author_filter = args.author.strip() if args.author else None
+        reviewer_filter = args.reviewer.strip() if getattr(args, "reviewer", None) else None
         creator_id = None
+        reviewer_id = None
 
         current_user = pr_service.get_current_user()
 
@@ -106,9 +142,19 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
             elif config.get_author():
                 author_filter = config.get_author()
 
+        if getattr(args, "assigned", False):
+            if current_user and current_user.get("id"):
+                reviewer_id = current_user.get("id")
+            elif config.get_author():
+                reviewer_filter = config.get_author()
+
         projects_to_query = []
         if args.project:
             projects_to_query = [args.project]
+        elif active_profile.projects:
+            projects_to_query = list(active_profile.projects)
+        elif active_profile.project:
+            projects_to_query = [active_profile.project]
         elif config.projects:
             projects_to_query = list(config.projects)
         elif config.project:
@@ -121,10 +167,16 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
 
         for proj in projects_to_query:
             try:
-                prs = pr_service.list_pull_requests(project=proj, creator_id=creator_id)
+                prs = pr_service.list_pull_requests(
+                    project=proj,
+                    creator_id=creator_id,
+                    reviewer_id=reviewer_id,
+                )
                 for p in prs:
                     if p.id not in seen_ids:
                         if not creator_id and author_filter and not p.matches_author(author_filter):
+                            continue
+                        if not reviewer_id and reviewer_filter and not p.has_reviewer(reviewer_filter):
                             continue
                         seen_ids.add(p.id)
                         all_prs.append(p)
@@ -147,7 +199,14 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
             ]
             print(json.dumps(out_list, indent=2))
         else:
-            print(PRTerminalFormatter.format_pr_list(all_prs, author_filter=author_filter))
+            filter_desc = None
+            if getattr(args, "assigned", False):
+                filter_desc = "assigned to current user as reviewer"
+            elif author_filter:
+                filter_desc = f"for author '{author_filter}'"
+            elif reviewer_filter:
+                filter_desc = f"for reviewer '{reviewer_filter}'"
+            print(PRTerminalFormatter.format_pr_list(all_prs, author_filter=author_filter, filter_desc=filter_desc))
         return 0
 
     # Specific PR inspection
@@ -224,12 +283,16 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
 
 
 def cmd_wi(args: argparse.Namespace, config: ToolConfig) -> int:
-    client = get_client(config, org=args.org, project=args.project)
+    profile_name = getattr(args, "profile", None)
+    client = get_client(config, org=args.org, project=args.project, profile_name=profile_name)
     wit_service = WorkItemService(client)
 
     if args.mine:
         try:
-            items = wit_service.list_my_work_items(project=args.project or config.project)
+            items = wit_service.list_my_work_items(
+                project=args.project or config.project,
+                item_type=args.type,
+            )
         except Exception as e:
             print(f"Error querying assigned work items: {str(e)}", file=sys.stderr)
             return 1
@@ -258,7 +321,13 @@ def cmd_wi(args: argparse.Namespace, config: ToolConfig) -> int:
 
     try:
         work_item_id = int(args.work_item_id)
-        work_item = wit_service.get_work_item(work_item_id)
+        include_comments = not getattr(args, "no_comments", False)
+        include_relations = not getattr(args, "no_relations", False)
+        work_item = wit_service.get_work_item(
+            work_item_id,
+            include_comments=include_comments,
+            include_relations=include_relations,
+        )
     except Exception as e:
         print(f"Error retrieving Work Item #{args.work_item_id}: {str(e)}", file=sys.stderr)
         return 1
@@ -283,6 +352,26 @@ def cmd_wi(args: argparse.Namespace, config: ToolConfig) -> int:
             "repro_steps": work_item.repro_steps,
             "tags": work_item.tags,
             "attachments": [{"name": a.name, "url": a.url} for a in work_item.attachments],
+            "related_items": [
+                {
+                    "id": r.id,
+                    "relation": r.relation_name,
+                    "title": r.title,
+                    "type": r.work_item_type,
+                    "state": r.state,
+                    "url": r.web_url,
+                }
+                for r in work_item.related_items
+            ],
+            "comments": [
+                {
+                    "id": c.id,
+                    "author": c.author,
+                    "date": c.published_date,
+                    "text": c.text,
+                }
+                for c in work_item.comments
+            ],
             "url": work_item.web_url,
         }
         print(json.dumps(out_data, indent=2))
@@ -305,7 +394,8 @@ def cmd_wi(args: argparse.Namespace, config: ToolConfig) -> int:
 
 
 def cmd_download(args: argparse.Namespace, config: ToolConfig) -> int:
-    client = get_client(config, org=args.org)
+    profile_name = getattr(args, "profile", None)
+    client = get_client(config, org=args.org, profile_name=profile_name)
     dest_path = Path(args.output) if args.output else Path("./downloaded_file")
 
     print(f"Downloading from {args.url} to {dest_path}...")
@@ -319,7 +409,8 @@ def cmd_download(args: argparse.Namespace, config: ToolConfig) -> int:
 
 
 def cmd_reply(args: argparse.Namespace, config: ToolConfig) -> int:
-    client = get_client(config, org=args.org, project=args.project)
+    profile_name = getattr(args, "profile", None)
+    client = get_client(config, org=args.org, project=args.project, profile_name=profile_name)
 
     if args.type == "wi":
         wit_service = WorkItemService(client)
@@ -358,19 +449,24 @@ def build_parser() -> argparse.ArgumentParser:
         prog="ado",
         description="Azure DevOps CLI interface for coding agents and engineers (Zero-PAT policy).",
     )
+    parser.add_argument("--profile", help="Active configuration profile to use")
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # Config
     p_config = subparsers.add_parser("config", help="View or modify Azure DevOps configurations")
+    p_config.add_argument("--profile", help="Profile to view, activate, or modify")
     p_config.add_argument("--set", action="append", help="Set key=value configuration item")
     p_config.add_argument("--local", action="store_true", help="Save configuration locally to .ado.json")
 
     # PR
     p_pr = subparsers.add_parser("pr", help="Inspect pull requests and review comments")
     p_pr.add_argument("pr_id", nargs="?", help="Pull Request ID to inspect")
+    p_pr.add_argument("--profile", help="Active configuration profile to use")
     p_pr.add_argument("--list", action="store_true", help="List active pull requests")
     p_pr.add_argument("--mine", action="store_true", help="Filter pull requests created by current user")
+    p_pr.add_argument("--assigned", action="store_true", help="Filter pull requests where current user is assigned as reviewer")
     p_pr.add_argument("--author", help="Filter pull requests by author name, email, or alias")
+    p_pr.add_argument("--reviewer", help="Filter pull requests by reviewer name, email, or alias")
     p_pr.add_argument("--project", help="Override Azure DevOps project")
     p_pr.add_argument("--org", help="Override Azure DevOps organization URL")
     p_pr.add_argument("--all", action="store_true", help="Include resolved and closed comment threads")
@@ -381,10 +477,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Work Item
     p_wi = subparsers.add_parser("wi", help="Inspect work items and download attachments")
     p_wi.add_argument("work_item_id", nargs="?", help="Work Item ID")
+    p_wi.add_argument("--profile", help="Active configuration profile to use")
     p_wi.add_argument("--mine", action="store_true", help="List active work items assigned to current user")
+    p_wi.add_argument("--type", "-t", help="Filter work items by type (e.g. Bug, Task, 'User Story')")
     p_wi.add_argument("--download", action="store_true", help="Download all attachments attached to work item")
     p_wi.add_argument("--for-agent", action="store_true", help="Output agent-ready prompt directly to stdout")
     p_wi.add_argument("--json", action="store_true", help="Output raw JSON data")
+    p_wi.add_argument("--no-comments", action="store_true", help="Exclude discussion comments from output")
+    p_wi.add_argument("--no-relations", action="store_true", help="Exclude related work items from output")
     p_wi.add_argument("--project", help="Override Azure DevOps project")
     p_wi.add_argument("--org", help="Override Azure DevOps organization URL")
     p_wi.add_argument("--output-dir", help="Directory where attachments should be downloaded")
@@ -393,12 +493,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Download
     p_dl = subparsers.add_parser("download", help="Stream download a file from Azure DevOps")
     p_dl.add_argument("url", help="Attachment download URL")
+    p_dl.add_argument("--profile", help="Active configuration profile to use")
     p_dl.add_argument("--output", "-o", required=True, help="Destination local file path")
     p_dl.add_argument("--org", help="Override Azure DevOps organization URL")
 
     # Reply
     p_rep = subparsers.add_parser("reply", help="Submit a comment or reply")
     p_rep.add_argument("id", help="Target Work Item ID or Pull Request ID")
+    p_rep.add_argument("--profile", help="Active configuration profile to use")
     p_rep.add_argument("--type", choices=["wi", "pr"], default="wi", help="Target type: wi or pr")
     p_rep.add_argument("--comment", required=True, help="Comment content text")
     p_rep.add_argument("--thread", help="Thread ID (required for PR replies)")
@@ -436,8 +538,6 @@ def main() -> int:
     except AdoError as e:
         print(f"\nAzure DevOps API Error: {str(e)}", file=sys.stderr)
         return 1
-    except KeyboardInterrupt:
-        return 130
     except Exception as e:
         print(f"\nUnexpected Error: {str(e)}", file=sys.stderr)
         return 1
