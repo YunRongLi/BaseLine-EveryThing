@@ -19,7 +19,7 @@ This file is used to overwrite or extend global agent rules.
 - **Marathon Training:** Use `Marathon/SKILL.md`
 
 ## Workflows
-- **Git Workflow:** Use `workflows/git-workflow.md`
+- **Git Workflow:** Use `git-workflow/SKILL.md`
 
 ## Overrides
 - **No Icons**: Do not use any icons or emojis (e.g., ✅, ⚠️, 🚀, 🏗️) in generated code, documentation, or responses. Use plain text only.

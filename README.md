@@ -20,6 +20,7 @@ A centralized repository for managing rules, skills, and workflows across multip
 │   ├── bmc-architect/  # BMC system and firmware architecture
 │   ├── c-programming-guideline/
 │   ├── cpp-core-guideline/
+│   ├── git-workflow/   # Git commit guidelines and standards
 │   ├── html-effectiveness/
 │   ├── kernel-review/
 │   ├── Marathon/
@@ -70,10 +71,14 @@ A centralized repository for managing rules, skills, and workflows across multip
 ## Workflows
 
 ### Git Workflow
-This repository follows a specific git commit format as defined in `workflows/git-workflow.md`:
-- `feat`: New features
-- `fix`: Bug fixes
-- `update`: Refactor or existing code updates
+This repository follows the git commit format defined in
+`skills/git-workflow/SKILL.md`:
+- Title length: <= 72 characters
+- Body line wrap: 72 characters per line
+- Types:
+  - `feat`: New features
+  - `fix`: Bug fixes
+  - `update`: Refactor or existing code updates
 
 ## License
 MIT
