@@ -5,7 +5,7 @@ posting review replies, and formatting PR context for AI agents.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 try:
     from .client import AzureDevOpsClient
@@ -13,6 +13,43 @@ try:
 except ImportError:
     from client import AzureDevOpsClient
     from exceptions import AdoError
+
+
+def format_vote(vote: int) -> str:
+    if vote >= 10:
+        return "Approved"
+    elif vote == 5:
+        return "Approved with suggestions"
+    elif vote == 0:
+        return "No vote"
+    elif vote == -5:
+        return "Waiting for author"
+    elif vote <= -10:
+        return "Rejected"
+    return f"Vote {vote}"
+
+
+VOTE_NAME_TO_INT: Dict[str, int] = {
+    "approve": 10,
+    "approved": 10,
+    "suggestions": 5,
+    "reset": 0,
+    "none": 0,
+    "wait": -5,
+    "waiting": -5,
+    "reject": -10,
+    "rejected": -10,
+}
+
+THREAD_STATUS_MAP: Dict[str, int] = {
+    "active": 1,
+    "fixed": 2,
+    "resolved": 2,
+    "wontfix": 3,
+    "closed": 4,
+    "bydesign": 5,
+    "pending": 6,
+}
 
 
 @dataclass
@@ -66,6 +103,8 @@ class PullRequest:
     creation_date: str
     created_by_email: str = ""
     reviewers: List[Dict[str, Any]] = field(default_factory=list)
+    commits: List[Dict[str, Any]] = field(default_factory=list)
+    changed_files: List[Dict[str, str]] = field(default_factory=list)
     raw_data: Dict[str, Any] = field(default_factory=dict)
 
     def matches_author(self, pattern: str) -> bool:
@@ -264,26 +303,219 @@ class PullRequestService:
 
         return threads
 
-    def reply_to_thread(
+    def get_commits(
         self,
         pr_id: int,
-        repository_id: str,
-        thread_id: int,
-        comment_text: str,
+        repository_id: Optional[str] = None,
         project: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         """
-        Posts a reply comment to an existing PR review thread.
+        Retrieves all commit entries associated with the PR.
         """
-        endpoint = f"git/repositories/{repository_id}/pullrequests/{pr_id}/threads/{thread_id}/comments"
-        payload = {"content": comment_text, "parentCommentId": 1, "commentType": 1}
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
+
+        endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/commits"
+        original_project = self.client.project
+        if project:
+            self.client.project = project
+
+        try:
+            data = self.client.get(endpoint, scoped_to_project=bool(self.client.project))
+        except Exception:
+            return []
+        finally:
+            self.client.project = original_project
+
+        raw_commits = data.get("value", []) if isinstance(data, dict) else []
+        commits = []
+        for c in raw_commits:
+            cid = c.get("commitId", "")
+            comment = c.get("comment", "")
+            author = (
+                c.get("author", {}).get("name")
+                or c.get("committer", {}).get("name")
+                or "Unknown"
+            )
+            commits.append({
+                "id": cid[:8] if cid else "",
+                "full_id": cid,
+                "author": author,
+                "message": comment.strip().splitlines()[0] if comment else "",
+            })
+        return commits
+
+    def get_changed_files(
+        self,
+        pr_id: int,
+        repository_id: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """
+        Retrieves files changed in the latest PR iteration.
+        """
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
 
         original_project = self.client.project
         if project:
             self.client.project = project
 
         try:
-            return self.client.post(endpoint, json_data=payload, scoped_to_project=bool(self.client.project))
+            it_endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/iterations"
+            it_data = self.client.get(it_endpoint, scoped_to_project=bool(self.client.project))
+            iterations = it_data.get("value", []) if isinstance(it_data, dict) else []
+            if not iterations:
+                return []
+            latest_it = max(it.get("id", 1) for it in iterations)
+
+            ch_endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/iterations/{latest_it}/changes"
+            ch_data = self.client.get(ch_endpoint, scoped_to_project=bool(self.client.project))
+            change_entries = ch_data.get("changeEntries", []) if isinstance(ch_data, dict) else []
+
+            results = []
+            for entry in change_entries:
+                item = entry.get("item", {})
+                path = item.get("path", "")
+                change_type = entry.get("changeType", "edit")
+                if path:
+                    results.append({"path": path, "type": str(change_type).lower()})
+            return results
+        except Exception:
+            return []
+        finally:
+            self.client.project = original_project
+
+    def update_thread_status(
+        self,
+        pr_id: int,
+        thread_id: int,
+        status: str,
+        repository_id: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Updates the status of an existing PR review thread (active, fixed, closed, wontfix).
+        """
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
+
+        status_key = status.strip().lower()
+        status_code = THREAD_STATUS_MAP.get(status_key, 2)
+
+        endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/threads/{thread_id}"
+        payload = {"status": status_code}
+
+        original_project = self.client.project
+        if project:
+            self.client.project = project
+
+        try:
+            return self.client.patch(endpoint, json_data=payload, scoped_to_project=bool(self.client.project))
+        finally:
+            self.client.project = original_project
+
+    def reply_to_thread(
+        self,
+        pr_id: int,
+        thread_id: int,
+        comment_text: str,
+        repository_id: Optional[str] = None,
+        parent_comment_id: Optional[int] = None,
+        status: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Posts a reply comment to a thread and optionally updates thread status.
+        Auto-resolves repository and parent comment ID if omitted.
+        """
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
+
+        original_project = self.client.project
+        if project:
+            self.client.project = project
+
+        try:
+            p_id = parent_comment_id
+            if p_id is None:
+                try:
+                    thread_info = self.client.get(
+                        f"git/repositories/{repo}/pullrequests/{pr_id}/threads/{thread_id}",
+                        scoped_to_project=bool(self.client.project),
+                    )
+                    comments = thread_info.get("comments", [])
+                    p_id = comments[0].get("id", 1) if comments else 1
+                except Exception:
+                    p_id = 1
+
+            endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/threads/{thread_id}/comments"
+            payload = {"content": comment_text, "parentCommentId": p_id, "commentType": 1}
+            res = self.client.post(endpoint, json_data=payload, scoped_to_project=bool(self.client.project))
+
+            if status:
+                try:
+                    self.update_thread_status(
+                        pr_id=pr_id,
+                        thread_id=thread_id,
+                        status=status,
+                        repository_id=repo,
+                        project=project,
+                    )
+                except Exception:
+                    pass
+
+            return res
+        finally:
+            self.client.project = original_project
+
+    def set_vote(
+        self,
+        pr_id: int,
+        vote: Any,
+        reviewer_id: Optional[str] = None,
+        repository_id: Optional[str] = None,
+        project: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Submits a review decision/vote on the PR.
+        """
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
+
+        rev_id = reviewer_id or self.get_current_user_id()
+        if not rev_id:
+            raise AdoError("Cannot determine authenticated reviewer identity for voting.")
+
+        if isinstance(vote, str):
+            vote_int = VOTE_NAME_TO_INT.get(vote.strip().lower(), 10)
+        else:
+            vote_int = int(vote)
+
+        endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/reviewers/{rev_id}"
+        payload = {"vote": vote_int}
+
+        original_project = self.client.project
+        if project:
+            self.client.project = project
+
+        try:
+            return self.client.put(endpoint, json_data=payload, scoped_to_project=bool(self.client.project))
         finally:
             self.client.project = original_project
 

@@ -91,8 +91,11 @@ python scripts/ado.py pr --project ProjectGamma --assigned
 python scripts/ado.py pr --list
 ```
 
-### Step 2: Extract Review Comments for Agent
+### Step 2: Inspect PR Summary and Review Threads
 ```bash
+# View full PR summary (description, reviewers/votes, changed files, commits, threads)
+python scripts/ado.py pr <pr_id>
+
 # Render agent-ready markdown prompt to stdout
 python scripts/ado.py pr <pr_id> --for-agent
 
@@ -100,10 +103,19 @@ python scripts/ado.py pr <pr_id> --for-agent
 python scripts/ado.py pr <pr_id> --out ./output/pr_<pr_id>_review.md
 ```
 
-### Step 3: Reply to a Review Comment
+### Step 3: Reply to a Review Comment and Vote
 ```bash
-python scripts/ado.py reply <pr_id> --type pr --thread <thread_id> --repo <repo_name_or_id> --comment "Resolved in commit abc1234."
-```
+# Reply to a review thread (auto-resolves repository)
+python scripts/ado.py pr <pr_id> --reply "Addressed in commit abc1234." --thread <thread_id>
+
+# Reply and mark thread as resolved/fixed
+python scripts/ado.py pr <pr_id> --reply "Resolved." --thread <thread_id> --resolve
+
+# Cast reviewer vote (approve, suggestions, wait, reject, reset)
+python scripts/ado.py pr <pr_id> --vote approve
+
+# Sibling command format
+python scripts/ado.py reply <pr_id> --type pr --thread <thread_id> --comment "Resolved in commit abc1234." --resolve
 
 ## 4. Work Item Triage Workflow
 

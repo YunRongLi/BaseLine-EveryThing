@@ -212,10 +212,69 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
     # Specific PR inspection
     pr_id = int(args.pr_id)
     try:
-        pr = pr_service.get_pull_request(pr_id)
+        pr = pr_service.get_pull_request(pr_id, project=args.project)
     except AdoError as e:
         print(f"Error fetching Pull Request #{pr_id}: {str(e)}", file=sys.stderr)
         return 1
+
+    # Check for direct review actions on PR
+    if getattr(args, "vote", None):
+        try:
+            pr_service.set_vote(
+                pr_id=pr.id,
+                vote=args.vote,
+                repository_id=pr.repository_id,
+                project=pr.project_name,
+            )
+            print(f"Successfully submitted review vote '{args.vote}' on PR #{pr.id}.")
+        except Exception as e:
+            print(f"Error submitting review vote: {str(e)}", file=sys.stderr)
+            return 1
+        if not getattr(args, "reply", None) and not args.for_agent and not args.json:
+            return 0
+
+    if getattr(args, "reply", None):
+        if not getattr(args, "thread", None):
+            print("Error: --thread <id> is required when replying to a review thread.", file=sys.stderr)
+            return 1
+        status = "fixed" if getattr(args, "resolve", False) else getattr(args, "status", None)
+        try:
+            pr_service.reply_to_thread(
+                pr_id=pr.id,
+                thread_id=int(args.thread),
+                comment_text=args.reply,
+                repository_id=pr.repository_id,
+                status=status,
+                project=pr.project_name,
+            )
+            msg = f"Successfully posted reply to Thread #{args.thread} on PR #{pr.id}."
+            if status:
+                msg += f" (Status updated to {status})"
+            print(msg)
+        except Exception as e:
+            print(f"Error posting reply to review thread: {str(e)}", file=sys.stderr)
+            return 1
+        if not args.for_agent and not args.json:
+            return 0
+
+    # Fetch rich context
+    try:
+        pr.commits = pr_service.get_commits(
+            pr_id=pr.id,
+            repository_id=pr.repository_id,
+            project=pr.project_name,
+        )
+    except Exception as e:
+        pr.commits = []
+
+    try:
+        pr.changed_files = pr_service.get_changed_files(
+            pr_id=pr.id,
+            repository_id=pr.repository_id,
+            project=pr.project_name,
+        )
+    except Exception as e:
+        pr.changed_files = []
 
     try:
         threads = pr_service.get_threads(
@@ -250,11 +309,22 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
         out_data = {
             "id": pr.id,
             "title": pr.title,
+            "description": pr.description,
             "project": pr.project_name,
             "repository": pr.repository_name,
             "source_branch": pr.source_branch,
             "target_branch": pr.target_branch,
             "author": pr.created_by,
+            "reviewers": [
+                {
+                    "name": r.get("displayName"),
+                    "vote": r.get("vote", 0),
+                    "required": r.get("isRequired", False),
+                }
+                for r in pr.reviewers
+            ],
+            "commits": pr.commits,
+            "changed_files": pr.changed_files,
             "url": pr.web_url,
             "threads": threads_data,
         }
@@ -422,19 +492,24 @@ def cmd_reply(args: argparse.Namespace, config: ToolConfig) -> int:
             print(f"Error posting comment to Work Item: {str(e)}", file=sys.stderr)
             return 1
     elif args.type == "pr":
-        if not args.thread or not args.repo:
-            print("Error: --thread and --repo are required when replying to a PR.", file=sys.stderr)
+        if not args.thread:
+            print("Error: --thread is required when replying to a PR.", file=sys.stderr)
             return 1
         pr_service = PullRequestService(client)
+        status = "fixed" if getattr(args, "resolve", False) else getattr(args, "status", None)
         try:
             pr_service.reply_to_thread(
                 pr_id=int(args.id),
-                repository_id=args.repo,
                 thread_id=int(args.thread),
                 comment_text=args.comment,
+                repository_id=args.repo,
+                status=status,
                 project=args.project,
             )
-            print(f"Successfully posted reply to Thread #{args.thread} on PR #{args.id}.")
+            msg = f"Successfully posted reply to Thread #{args.thread} on PR #{args.id}."
+            if status:
+                msg += f" (Status updated to {status})"
+            print(msg)
             return 0
         except Exception as e:
             print(f"Error posting reply to PR thread: {str(e)}", file=sys.stderr)
@@ -470,6 +545,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_pr.add_argument("--project", help="Override Azure DevOps project")
     p_pr.add_argument("--org", help="Override Azure DevOps organization URL")
     p_pr.add_argument("--all", action="store_true", help="Include resolved and closed comment threads")
+    p_pr.add_argument("--reply", help="Post a reply comment to a review thread")
+    p_pr.add_argument("--thread", help="Thread ID to reply to")
+    p_pr.add_argument("--resolve", action="store_true", help="Mark review thread as resolved/fixed")
+    p_pr.add_argument("--status", help="Update thread status (active, fixed, closed, wontfix)")
+    p_pr.add_argument("--vote", help="Submit review vote (approve, suggestions, wait, reject, reset)")
     p_pr.add_argument("--for-agent", action="store_true", help="Output agent-ready prompt directly to stdout")
     p_pr.add_argument("--json", action="store_true", help="Output raw JSON data")
     p_pr.add_argument("--out", help="Save markdown prompt to specified path")
@@ -504,8 +584,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--type", choices=["wi", "pr"], default="wi", help="Target type: wi or pr")
     p_rep.add_argument("--comment", required=True, help="Comment content text")
     p_rep.add_argument("--thread", help="Thread ID (required for PR replies)")
-    p_rep.add_argument("--repo", help="Repository ID/Name (required for PR replies)")
-    p_rep.add_argument("--project", help="Project name (required for PR replies)")
+    p_rep.add_argument("--resolve", action="store_true", help="Mark review thread as resolved/fixed")
+    p_rep.add_argument("--status", help="Update thread status (active, fixed, closed, wontfix)")
+    p_rep.add_argument("--repo", help="Repository ID/Name (auto-resolved from PR ID if omitted)")
+    p_rep.add_argument("--project", help="Project name (optional, auto-resolved if omitted)")
     p_rep.add_argument("--org", help="Override Azure DevOps organization URL")
 
     return parser

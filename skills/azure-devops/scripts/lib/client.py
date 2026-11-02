@@ -128,6 +128,9 @@ class AzureDevOpsClient:
     def patch(self, endpoint: str, **kwargs) -> Any:
         return self.request("PATCH", endpoint, **kwargs)
 
+    def put(self, endpoint: str, **kwargs) -> Any:
+        return self.request("PUT", endpoint, **kwargs)
+
     def download_file(self, download_url: str, destination: Path) -> Path:
         """
         Downloads a binary or text attachment directly to disk using authenticated streaming.

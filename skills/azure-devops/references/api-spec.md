@@ -24,6 +24,8 @@ Authentication is performed exclusively via Azure CLI OAuth 2.0 Bearer tokens.
 - **List PRs by Creator**: `GET {org}/_apis/git/pullrequests?searchCriteria.creatorId={creator_id}&searchCriteria.status=active&api-version=7.0`
 - **List PRs by Reviewer**: `GET {org}/_apis/git/pullrequests?searchCriteria.reviewerId={reviewer_id}&searchCriteria.status=active&api-version=7.0`
 - **Get PR**: `GET {org}/_apis/git/pullrequests/{pr_id}?api-version=7.0`
+- **Get PR Commits**: `GET {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/commits?api-version=7.0`
+- **Get Changed Files (Iteration)**: `GET {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/iterations/{iterationId}/changes?api-version=7.0`
 - **Get PR Threads**: `GET {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/threads?api-version=7.0`
 - **Post Reply to Thread**:
   - `POST {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/threads/{threadId}/comments?api-version=7.0`
@@ -31,8 +33,24 @@ Authentication is performed exclusively via Azure CLI OAuth 2.0 Bearer tokens.
     ```json
     {
       "content": "Addressed comment in commit ...",
-      "parentCommentId": 1,
+      "parentCommentId": "<parent_comment_id>",
       "commentType": 1
+    }
+    ```
+- **Update Thread Status**:
+  - `PATCH {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/threads/{threadId}?api-version=7.0`
+  - Body:
+    ```json
+    {
+      "status": 2
+    }
+    ```
+- **Submit Reviewer Vote**:
+  - `PUT {org}/{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pr_id}/reviewers/{reviewerId}?api-version=7.0`
+  - Body:
+    ```json
+    {
+      "vote": 10
     }
     ```
 

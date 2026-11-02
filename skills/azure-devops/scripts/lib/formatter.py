@@ -10,10 +10,10 @@ import re
 from typing import Any, Dict, List, Optional
 
 try:
-    from .pull_requests import PullRequest, PRThread, PRComment
+    from .pull_requests import PullRequest, PRThread, PRComment, format_vote
     from .work_items import WorkItem, WorkItemAttachment, WorkItemComment, RelatedWorkItem
 except ImportError:
-    from pull_requests import PullRequest, PRThread, PRComment
+    from pull_requests import PullRequest, PRThread, PRComment, format_vote
     from work_items import WorkItem, WorkItemAttachment, WorkItemComment, RelatedWorkItem
 
 
@@ -67,6 +67,31 @@ class PRTerminalFormatter:
         lines.append(f"Status    : {pr.status.upper()}")
         if pr.web_url:
             lines.append(f"Web URL   : {pr.web_url}")
+
+        if pr.reviewers:
+            lines.append("\nReviewers :")
+            for rev in pr.reviewers:
+                name = rev.get("displayName", "Unknown")
+                vote = rev.get("vote", 0)
+                vote_str = format_vote(vote)
+                req = " (Required)" if rev.get("isRequired") else ""
+                lines.append(f"  - {name}: {vote_str}{req}")
+
+        if pr.description and pr.description.strip():
+            lines.append("\nDescription:")
+            for d_line in pr.description.strip().splitlines():
+                lines.append(f"  {d_line}")
+
+        if pr.changed_files:
+            lines.append(f"\nChanged Files ({len(pr.changed_files)}):")
+            for f in pr.changed_files:
+                ch_type = f.get("type", "edit").upper()[:6]
+                lines.append(f"  - [{ch_type}] {f.get('path')}")
+
+        if pr.commits:
+            lines.append(f"\nCommits ({len(pr.commits)}):")
+            for c in pr.commits:
+                lines.append(f"  - {c.get('id')} {c.get('author')}: {c.get('message')}")
 
         active_threads = [t for t in threads if t.is_active and t.human_comments]
         resolved_threads = [t for t in threads if not t.is_active and t.human_comments]
@@ -127,6 +152,32 @@ class PRAgentMarkdownReporter:
             lines.append(f"- **Web URL**: {pr.web_url}")
         lines.append(f"- **Extracted**: {timestamp_str}")
         lines.append("")
+
+        if pr.description and pr.description.strip():
+            lines.append("## Description")
+            lines.append(pr.description.strip())
+            lines.append("")
+
+        if pr.reviewers:
+            lines.append("## Reviewers")
+            for rev in pr.reviewers:
+                r_name = rev.get("displayName", "Unknown")
+                r_vote = format_vote(rev.get("vote", 0))
+                req = " (Required)" if rev.get("isRequired") else ""
+                lines.append(f"- **{r_name}**: {r_vote}{req}")
+            lines.append("")
+
+        if pr.changed_files:
+            lines.append(f"## Changed Files ({len(pr.changed_files)})")
+            for f in pr.changed_files:
+                lines.append(f"- `[{f.get('type', 'edit').upper()}]` `{f.get('path')}`")
+            lines.append("")
+
+        if pr.commits:
+            lines.append(f"## Commits ({len(pr.commits)})")
+            for c in pr.commits:
+                lines.append(f"- `{c.get('id')}` {c.get('author')}: {c.get('message')}")
+            lines.append("")
 
         relevant_threads = [t for t in threads if (t.is_active or not active_only) and t.human_comments]
 
