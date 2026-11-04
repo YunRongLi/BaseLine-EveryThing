@@ -96,6 +96,9 @@ python scripts/ado.py pr --list
 # View full PR summary (description, reviewers/votes, changed files, commits, threads)
 python scripts/ado.py pr <pr_id>
 
+# View only review threads and comments (fast, compact, no payload overflow)
+python scripts/ado.py pr <pr_id> --comments
+
 # Render agent-ready markdown prompt to stdout
 python scripts/ado.py pr <pr_id> --for-agent
 

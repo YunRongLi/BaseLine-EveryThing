@@ -258,22 +258,27 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
             return 0
 
     # Fetch rich context
-    try:
-        pr.commits = pr_service.get_commits(
-            pr_id=pr.id,
-            repository_id=pr.repository_id,
-            project=pr.project_name,
-        )
-    except Exception as e:
-        pr.commits = []
+    comments_only = getattr(args, "comments_only", False)
+    if not comments_only:
+        try:
+            pr.commits = pr_service.get_commits(
+                pr_id=pr.id,
+                repository_id=pr.repository_id,
+                project=pr.project_name,
+            )
+        except Exception:
+            pr.commits = []
 
-    try:
-        pr.changed_files = pr_service.get_changed_files(
-            pr_id=pr.id,
-            repository_id=pr.repository_id,
-            project=pr.project_name,
-        )
-    except Exception as e:
+        try:
+            pr.changed_files = pr_service.get_changed_files(
+                pr_id=pr.id,
+                repository_id=pr.repository_id,
+                project=pr.project_name,
+            )
+        except Exception:
+            pr.changed_files = []
+    else:
+        pr.commits = []
         pr.changed_files = []
 
     try:
@@ -286,6 +291,13 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
     except Exception as e:
         print(f"Warning: Error fetching review threads: {str(e)}", file=sys.stderr)
         threads = []
+
+    if getattr(args, "thread", None) and not getattr(args, "reply", None):
+        target_tid = int(args.thread)
+        threads = [t for t in threads if t.id == target_tid]
+        if not threads:
+            print(f"Thread #{target_tid} not found on PR #{pr.id}.")
+            return 0
 
     if args.json:
         threads_data = [
@@ -306,6 +318,10 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
             }
             for t in threads
         ]
+        if comments_only:
+            print(json.dumps(threads_data, indent=2))
+            return 0
+
         out_data = {
             "id": pr.id,
             "title": pr.title,
@@ -335,6 +351,7 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
         pr=pr,
         threads=threads,
         active_only=not args.all,
+        comments_only=comments_only,
     )
 
     if args.out:
@@ -346,8 +363,10 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
 
     if args.for_agent:
         print(agent_prompt_md)
+    elif getattr(args, "compact", False):
+        print(PRTerminalFormatter.format_threads_summary(pr, threads))
     else:
-        print(PRTerminalFormatter.format_threads_terminal(pr, threads))
+        print(PRTerminalFormatter.format_threads_terminal(pr, threads, comments_only=comments_only))
 
     return 0
 
@@ -545,6 +564,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_pr.add_argument("--project", help="Override Azure DevOps project")
     p_pr.add_argument("--org", help="Override Azure DevOps organization URL")
     p_pr.add_argument("--all", action="store_true", help="Include resolved and closed comment threads")
+    p_pr.add_argument(
+        "--comments",
+        "--threads",
+        dest="comments_only",
+        action="store_true",
+        help="Display only review threads and comments (skips commits and changed files)",
+    )
+    p_pr.add_argument(
+        "--compact",
+        action="store_true",
+        help="Display concise single-line tabular summary of review threads",
+    )
     p_pr.add_argument("--reply", help="Post a reply comment to a review thread")
     p_pr.add_argument("--thread", help="Thread ID to reply to")
     p_pr.add_argument("--resolve", action="store_true", help="Mark review thread as resolved/fixed")

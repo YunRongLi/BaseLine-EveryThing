@@ -55,43 +55,105 @@ class PRTerminalFormatter:
         return "\n".join(lines)
 
     @staticmethod
-    def format_threads_terminal(pr: PullRequest, threads: List[PRThread]) -> str:
+    def format_threads_summary(pr: PullRequest, threads: List[PRThread]) -> str:
         lines = []
         lines.append("=" * 80)
         lines.append(f"PULL REQUEST #{pr.id}: {pr.title}")
         lines.append("=" * 80)
-        lines.append(f"Project   : {pr.project_name}")
-        lines.append(f"Repository: {pr.repository_name}")
+        lines.append(f"Project   : {pr.project_name} | Repository: {pr.repository_name} | Status: {pr.status.upper()}")
         lines.append(f"Branches  : {pr.source_branch} -> {pr.target_branch}")
         lines.append(f"Author    : {pr.created_by}")
-        lines.append(f"Status    : {pr.status.upper()}")
+
+        active_threads = [t for t in threads if t.is_active and t.human_comments]
+        resolved_threads = [t for t in threads if not t.is_active and t.human_comments]
+        lines.append(f"Threads   : {len(active_threads)} active, {len(resolved_threads)} resolved")
+        lines.append("-" * 110)
+
+        if not threads or (not active_threads and not resolved_threads):
+            lines.append("No review comments found on this pull request.")
+            return "\n".join(lines)
+
+        lines.append(f"{'Thread ID':<10} {'Status':<10} {'Author':<20} {'Location':<35} {'Comment Preview'}")
+        lines.append("-" * 110)
+
+        for t in threads:
+            comments = t.human_comments
+            if not comments:
+                continue
+            first_c = comments[0]
+            loc = t.file_path or "PR Overview"
+            if t.line_start:
+                loc += f":{t.line_start}"
+            if len(loc) > 34:
+                loc = "..." + loc[-31:]
+
+            preview = ""
+            for raw_line in first_c.content.splitlines():
+                cleaned = raw_line.strip()
+                cleaned = re.sub(r"[#*`_<>!@~]", "", cleaned).strip()
+                if cleaned:
+                    preview = cleaned
+                    break
+            if len(preview) > 35:
+                preview = preview[:32] + "..."
+
+            author = first_c.author_name
+            if len(author) > 19:
+                author = author[:16] + "..."
+
+            lines.append(f"#{t.id:<9} {t.status:<10} {author:<20} {loc:<35} {preview}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_threads_terminal(
+        pr: PullRequest,
+        threads: List[PRThread],
+        comments_only: bool = False,
+    ) -> str:
+        lines = []
+        lines.append("=" * 80)
+        lines.append(f"PULL REQUEST #{pr.id}: {pr.title}")
+        lines.append("=" * 80)
+        lines.append(f"Project   : {pr.project_name} | Repository: {pr.repository_name} | Status: {pr.status.upper()}")
+        lines.append(f"Branches  : {pr.source_branch} -> {pr.target_branch}")
+        lines.append(f"Author    : {pr.created_by}")
         if pr.web_url:
             lines.append(f"Web URL   : {pr.web_url}")
 
-        if pr.reviewers:
-            lines.append("\nReviewers :")
-            for rev in pr.reviewers:
-                name = rev.get("displayName", "Unknown")
-                vote = rev.get("vote", 0)
-                vote_str = format_vote(vote)
-                req = " (Required)" if rev.get("isRequired") else ""
-                lines.append(f"  - {name}: {vote_str}{req}")
+        if not comments_only:
+            if pr.reviewers:
+                lines.append("\nReviewers :")
+                for rev in pr.reviewers:
+                    name = rev.get("displayName", "Unknown")
+                    vote = rev.get("vote", 0)
+                    vote_str = format_vote(vote)
+                    req = " (Required)" if rev.get("isRequired") else ""
+                    lines.append(f"  - {name}: {vote_str}{req}")
 
-        if pr.description and pr.description.strip():
-            lines.append("\nDescription:")
-            for d_line in pr.description.strip().splitlines():
-                lines.append(f"  {d_line}")
+            if pr.description and pr.description.strip():
+                lines.append("\nDescription:")
+                for d_line in pr.description.strip().splitlines():
+                    lines.append(f"  {d_line}")
 
-        if pr.changed_files:
-            lines.append(f"\nChanged Files ({len(pr.changed_files)}):")
-            for f in pr.changed_files:
-                ch_type = f.get("type", "edit").upper()[:6]
-                lines.append(f"  - [{ch_type}] {f.get('path')}")
+            if pr.changed_files:
+                limit = 10
+                shown = pr.changed_files[:limit]
+                lines.append(f"\nChanged Files ({len(pr.changed_files)}):")
+                for f in shown:
+                    ch_type = f.get("type", "edit").upper()[:6]
+                    lines.append(f"  - [{ch_type}] {f.get('path')}")
+                if len(pr.changed_files) > limit:
+                    lines.append(f"  ... and {len(pr.changed_files) - limit} more files (use --json to view all)")
 
-        if pr.commits:
-            lines.append(f"\nCommits ({len(pr.commits)}):")
-            for c in pr.commits:
-                lines.append(f"  - {c.get('id')} {c.get('author')}: {c.get('message')}")
+            if pr.commits:
+                limit = 10
+                shown = pr.commits[:limit]
+                lines.append(f"\nCommits ({len(pr.commits)}):")
+                for c in shown:
+                    lines.append(f"  - {c.get('id')} {c.get('author')}: {c.get('message')}")
+                if len(pr.commits) > limit:
+                    lines.append(f"  ... and {len(pr.commits) - limit} more commits")
 
         active_threads = [t for t in threads if t.is_active and t.human_comments]
         resolved_threads = [t for t in threads if not t.is_active and t.human_comments]
@@ -134,6 +196,7 @@ class PRAgentMarkdownReporter:
         pr: PullRequest,
         threads: List[PRThread],
         active_only: bool = True,
+        comments_only: bool = False,
     ) -> str:
         timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         lines = []
@@ -153,31 +216,32 @@ class PRAgentMarkdownReporter:
         lines.append(f"- **Extracted**: {timestamp_str}")
         lines.append("")
 
-        if pr.description and pr.description.strip():
-            lines.append("## Description")
-            lines.append(pr.description.strip())
-            lines.append("")
+        if not comments_only:
+            if pr.description and pr.description.strip():
+                lines.append("## Description")
+                lines.append(pr.description.strip())
+                lines.append("")
 
-        if pr.reviewers:
-            lines.append("## Reviewers")
-            for rev in pr.reviewers:
-                r_name = rev.get("displayName", "Unknown")
-                r_vote = format_vote(rev.get("vote", 0))
-                req = " (Required)" if rev.get("isRequired") else ""
-                lines.append(f"- **{r_name}**: {r_vote}{req}")
-            lines.append("")
+            if pr.reviewers:
+                lines.append("## Reviewers")
+                for rev in pr.reviewers:
+                    r_name = rev.get("displayName", "Unknown")
+                    r_vote = format_vote(rev.get("vote", 0))
+                    req = " (Required)" if rev.get("isRequired") else ""
+                    lines.append(f"- **{r_name}**: {r_vote}{req}")
+                lines.append("")
 
-        if pr.changed_files:
-            lines.append(f"## Changed Files ({len(pr.changed_files)})")
-            for f in pr.changed_files:
-                lines.append(f"- `[{f.get('type', 'edit').upper()}]` `{f.get('path')}`")
-            lines.append("")
+            if pr.changed_files:
+                lines.append(f"## Changed Files ({len(pr.changed_files)})")
+                for f in pr.changed_files:
+                    lines.append(f"- `[{f.get('type', 'edit').upper()}]` `{f.get('path')}`")
+                lines.append("")
 
-        if pr.commits:
-            lines.append(f"## Commits ({len(pr.commits)})")
-            for c in pr.commits:
-                lines.append(f"- `{c.get('id')}` {c.get('author')}: {c.get('message')}")
-            lines.append("")
+            if pr.commits:
+                lines.append(f"## Commits ({len(pr.commits)})")
+                for c in pr.commits:
+                    lines.append(f"- `{c.get('id')}` {c.get('author')}: {c.get('message')}")
+                lines.append("")
 
         relevant_threads = [t for t in threads if (t.is_active or not active_only) and t.human_comments]
 
@@ -357,4 +421,3 @@ class WIAgentMarkdownReporter:
             lines.append("")
 
         return "\n".join(lines)
-
