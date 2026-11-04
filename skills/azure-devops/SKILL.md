@@ -67,6 +67,8 @@ Profile resolution automatically switches when:
 * An explicit `--profile <name>` flag is passed.
 * The target `--project <name>` belongs to a configured profile's projects.
 * The active shell has `$AZURE_CONFIG_DIR` pointing to a profile's Azure configuration directory.
+* Contextual heuristics match: the current workspace directory name or active git remote URL matches a configured profile or organization.
+* Fallback: If `active_profile` is unset or 'default', the first configured profile with a valid organization is used automatically.
 
 ## 3. Pull Request Review Workflow
 
@@ -96,8 +98,20 @@ python scripts/ado.py pr --list
 # View full PR summary (description, reviewers/votes, changed files, commits, threads)
 python scripts/ado.py pr <pr_id>
 
-# View only review threads and comments (fast, compact, no payload overflow)
+# View concise tabular summary of all review threads
+python scripts/ado.py pr <pr_id> --compact
+
+# View only review threads and comments (skips commits and changed files)
 python scripts/ado.py pr <pr_id> --comments
+
+# Filter review threads to only human comments (excludes automated bot noise)
+python scripts/ado.py pr <pr_id> --human
+
+# Filter review threads to only automated bot/scanner findings
+python scripts/ado.py pr <pr_id> --bots
+
+# Combine filters (e.g. compact summary of human reviews only)
+python scripts/ado.py pr <pr_id> --human --compact
 
 # Render agent-ready markdown prompt to stdout
 python scripts/ado.py pr <pr_id> --for-agent

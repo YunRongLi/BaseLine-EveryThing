@@ -62,6 +62,18 @@ class PRComment:
     published_date: str
     comment_type: str = "text"
     is_deleted: bool = False
+    author_id: str = ""
+
+    @property
+    def is_bot(self) -> bool:
+        name = self.author_name.lower()
+        email = self.author_email.lower()
+        bot_keywords = ("agency", "stride", "bot", "service account", "build", "pipeline", "automation", "github-actions")
+        return any(k in name for k in bot_keywords) or any(k in email for k in bot_keywords)
+
+    @property
+    def is_human(self) -> bool:
+        return not self.is_bot
 
 
 @dataclass
@@ -84,6 +96,14 @@ class PRThread:
             c for c in self.comments
             if not c.is_deleted and c.comment_type == "text" and c.content and c.content.strip()
         ]
+
+    @property
+    def is_human_thread(self) -> bool:
+        return any(c.is_human for c in self.human_comments)
+
+    @property
+    def is_bot_thread(self) -> bool:
+        return not self.is_human_thread
 
 
 @dataclass
@@ -283,6 +303,7 @@ class PullRequestService:
                     published_date=c.get("publishedDate", ""),
                     comment_type=c.get("commentType", "text"),
                     is_deleted=bool(c.get("isDeleted")),
+                    author_id=author_dict.get("id", ""),
                 )
                 comments.append(comment_obj)
 

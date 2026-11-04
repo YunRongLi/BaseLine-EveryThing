@@ -17,6 +17,27 @@ except ImportError:
     from work_items import WorkItem, WorkItemAttachment, WorkItemComment, RelatedWorkItem
 
 
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F1E0-\U0001F1FF"  # flags
+    "\U0001F300-\U0001F5FF"  # symbols & pictographs
+    "\U0001F600-\U0001F64F"  # emoticons
+    "\U0001F680-\U0001F6FF"  # transport & map
+    "\U0001F700-\U0001F77F"  # alchemical
+    "\U0001F780-\U0001F7FF"  # geometric shapes
+    "\U0001F800-\U0001F8FF"  # arrows
+    "\U0001F900-\U0001F9FF"  # supplemental pictographs
+    "\U0001FA00-\U0001FA6F"  # chess
+    "\U0001FA70-\U0001FAFF"  # symbols ext
+    "\U00002702-\U000027B0"  # dingbats
+    "\U000024C2-\U0001F251"
+    "\U00002600-\U000026FF"  # misc symbols
+    "\U00002300-\U000023FF"  # misc technical
+    "]+",
+    flags=re.UNICODE,
+)
+
+
 def strip_html(html_str: str) -> str:
     """Removes HTML tags and cleans up entities for agent readability."""
     if not html_str:
@@ -27,6 +48,22 @@ def strip_html(html_str: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
     text = text.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
     return "\n".join(line.strip() for line in text.splitlines() if line.strip())
+
+
+def strip_emojis(text: str) -> str:
+    """Removes all unicode emojis and graphical symbols to ensure plain text."""
+    if not text:
+        return ""
+    return EMOJI_PATTERN.sub("", text)
+
+
+def clean_plain_text(text: str) -> str:
+    """Removes HTML tags, emojis, and collapses excess whitespace."""
+    if not text:
+        return ""
+    text = strip_html(text)
+    text = strip_emojis(text)
+    return text.strip()
 
 
 class PRTerminalFormatter:
@@ -73,8 +110,8 @@ class PRTerminalFormatter:
             lines.append("No review comments found on this pull request.")
             return "\n".join(lines)
 
-        lines.append(f"{'Thread ID':<10} {'Status':<10} {'Author':<20} {'Location':<35} {'Comment Preview'}")
-        lines.append("-" * 110)
+        lines.append(f"{'Thread ID':<10} {'Type':<7} {'Status':<10} {'Author':<20} {'Location':<35} {'Comment Preview'}")
+        lines.append("-" * 120)
 
         for t in threads:
             comments = t.human_comments
@@ -89,19 +126,20 @@ class PRTerminalFormatter:
 
             preview = ""
             for raw_line in first_c.content.splitlines():
-                cleaned = raw_line.strip()
-                cleaned = re.sub(r"[#*`_<>!@~]", "", cleaned).strip()
+                cleaned = clean_plain_text(raw_line)
+                cleaned = re.sub(r"[#*`_!@~-]", "", cleaned).strip()
                 if cleaned:
                     preview = cleaned
                     break
-            if len(preview) > 35:
-                preview = preview[:32] + "..."
+            if len(preview) > 40:
+                preview = preview[:37] + "..."
 
             author = first_c.author_name
             if len(author) > 19:
                 author = author[:16] + "..."
 
-            lines.append(f"#{t.id:<9} {t.status:<10} {author:<20} {loc:<35} {preview}")
+            thread_type = "HUMAN" if t.is_human_thread else "BOT"
+            lines.append(f"#{t.id:<9} {thread_type:<7} {t.status:<10} {author:<20} {loc:<35} {preview}")
 
         return "\n".join(lines)
 
@@ -178,12 +216,14 @@ class PRTerminalFormatter:
                     loc += f" (Line {t.line_start})"
 
             status_tag = f"[{t.status.upper()}]"
-            lines.append(f"\nThread #{t.id} {status_tag} - {loc}")
+            thread_type = "[HUMAN]" if t.is_human_thread else "[BOT]"
+            lines.append(f"\nThread #{t.id} {status_tag} {thread_type} - {loc}")
             lines.append("-" * 60)
 
             for c in comments:
                 lines.append(f"  Author: {c.author_name} ({c.published_date})")
-                for c_line in c.content.splitlines():
+                cleaned_content = strip_emojis(c.content)
+                for c_line in cleaned_content.splitlines():
                     lines.append(f"    {c_line}")
                 lines.append("")
 

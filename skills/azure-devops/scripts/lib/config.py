@@ -113,8 +113,12 @@ class ToolConfig:
         5. Fallback synthesized from top-level config attributes
         """
         # 1. Profile override
-        if profile_override and profile_override in self.profiles:
-            return self.profiles[profile_override]
+        if profile_override:
+            if profile_override in self.profiles:
+                return self.profiles[profile_override]
+            for p_name, p_cfg in self.profiles.items():
+                if p_name.lower() == profile_override.lower():
+                    return p_cfg
 
         # 2. Project override match
         if project_override:
@@ -129,11 +133,23 @@ class ToolConfig:
                 if p_cfg.matches_azure_config_dir(env_az_dir):
                     return p_cfg
 
-        # 4. Configured active profile
+        # 4. Contextual auto-detection (git remote and workspace path heuristics)
+        detected = self._detect_profile_from_git_and_path()
+        if detected:
+            return detected
+
+        # 5. Configured active profile
         if self.active_profile in self.profiles:
             return self.profiles[self.active_profile]
 
-        # 5. Fallback synthesis
+        # 6. Fallback to first configured profile if active_profile is unset or 'default'
+        if self.profiles and not self.organization:
+            for p_cfg in self.profiles.values():
+                if p_cfg.organization:
+                    return p_cfg
+            return next(iter(self.profiles.values()))
+
+        # 7. Fallback synthesis from top-level config attributes
         return ProfileConfig(
             organization=self.organization,
             azure_config_dir=self.azure_config_dir,
@@ -142,6 +158,46 @@ class ToolConfig:
             project=self.project,
             projects=list(self.projects),
         )
+
+    def _detect_profile_from_git_and_path(self) -> Optional[ProfileConfig]:
+        """
+        Attempts to infer profile from current git remote URL or workspace directory name.
+        """
+        if not self.profiles:
+            return None
+
+        # Check git remote
+        try:
+            res = subprocess.run(
+                ["git", "remote", "-v"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if res.returncode == 0 and res.stdout:
+                out = res.stdout.lower()
+                for p_name, p_cfg in self.profiles.items():
+                    if p_cfg.organization:
+                        clean_org = p_cfg.organization.lower().replace("https://", "").replace("http://", "").strip("/")
+                        org_domain = clean_org.split(".")[0].split("/")[-1]
+                        if org_domain and org_domain in out:
+                            return p_cfg
+                    for proj in p_cfg.projects:
+                        if proj and proj.lower() in out:
+                            return p_cfg
+        except Exception:
+            pass
+
+        # Check path heuristics (e.g. /home/.../MSFTWS contains msft)
+        try:
+            cwd_str = str(Path.cwd()).lower()
+            for p_name, p_cfg in self.profiles.items():
+                if p_name.lower() in cwd_str:
+                    return p_cfg
+        except Exception:
+            pass
+
+        return None
 
     def get_author(self) -> str:
         """

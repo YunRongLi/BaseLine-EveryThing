@@ -299,17 +299,31 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
             print(f"Thread #{target_tid} not found on PR #{pr.id}.")
             return 0
 
+    if getattr(args, "human", False):
+        threads = [t for t in threads if t.is_human_thread]
+    elif getattr(args, "bots", False):
+        threads = [t for t in threads if t.is_bot_thread]
+
     if args.json:
         threads_data = [
             {
                 "id": t.id,
                 "status": t.status,
+                "type": "human" if t.is_human_thread else "bot",
                 "file_path": t.file_path,
                 "line_start": t.line_start,
                 "line_end": t.line_end,
                 "comments": [
                     {
                         "author": c.author_name,
+                        "author_name": c.author_name,
+                        "author_email": c.author_email,
+                        "author_details": {
+                            "displayName": c.author_name,
+                            "uniqueName": c.author_email,
+                            "id": c.author_id,
+                        },
+                        "is_bot": c.is_bot,
                         "date": c.published_date,
                         "content": c.content,
                     }
@@ -575,6 +589,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--compact",
         action="store_true",
         help="Display concise single-line tabular summary of review threads",
+    )
+    p_pr.add_argument(
+        "--human",
+        action="store_true",
+        help="Filter review threads to only those containing human comments",
+    )
+    p_pr.add_argument(
+        "--bots",
+        "--bot",
+        dest="bots",
+        action="store_true",
+        help="Filter review threads to only automated bot/scanner findings",
     )
     p_pr.add_argument("--reply", help="Post a reply comment to a review thread")
     p_pr.add_argument("--thread", help="Thread ID to reply to")
