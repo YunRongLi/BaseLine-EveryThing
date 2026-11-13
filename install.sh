@@ -1,4 +1,4 @@
-# AI Agent Skills & Workflows Installer
+# AI Agent Skills Installer
 
 AGENT="antigravity"
 SCOPE="global"
@@ -16,7 +16,7 @@ while [ $# -gt 0 ]; do
         -h|--help)
             echo "Usage: ./install.sh [AGENT] [SCOPE] [OPTIONS]"
             echo ""
-            echo "Installs AI Agent skills and workflows from the current directory."
+            echo "Installs AI Agent skills from the current directory."
             echo ""
             echo "Arguments:"
             echo "  AGENT             Which agent format to target: antigravity, antigravity-ide, or opencode (default: antigravity)."
@@ -48,18 +48,13 @@ if [ "$SCOPE" = "workspace" ]; then
         antigravity)
             BASE_DIR="${PREFIX}.agents/plugins/$PLUGIN_NAME"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             LEGACY_SKILLS="${PREFIX}.agents/skills"
-            LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
             ;;
         antigravity-ide)
             BASE_DIR="${PREFIX}.agents/plugins/$PLUGIN_NAME"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             DIRECT_WORKSPACE_SKILLS="${PREFIX}.agents/skills"
-            DIRECT_WORKSPACE_WORKFLOWS="${PREFIX}.agents/workflows"
             LEGACY_SKILLS="${PREFIX}.agents/skills"
-            LEGACY_WORKFLOWS="${PREFIX}.agents/workflows"
             ;;
         opencode)
             BASE_DIR="${PREFIX}.opencode"
@@ -72,20 +67,14 @@ else
         antigravity)
             BASE_DIR="$HOME/.gemini/antigravity-cli/plugins/$PLUGIN_NAME"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             DIRECT_GLOBAL_SKILLS="$HOME/.gemini/antigravity-cli/skills"
-            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/antigravity-cli/workflows"
             SHARED_SKILLS="$HOME/.gemini/skills"
-            SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
         antigravity-ide)
             BASE_DIR="$HOME/.gemini/antigravity-ide/plugins/$PLUGIN_NAME"
             TARGET_SKILLS="$BASE_DIR/skills"
-            TARGET_WORKFLOWS="$BASE_DIR/workflows"
             DIRECT_GLOBAL_SKILLS="$HOME/.gemini/config/skills"
-            DIRECT_GLOBAL_WORKFLOWS="$HOME/.gemini/config/global_workflows"
             SHARED_SKILLS="$HOME/.gemini/skills"
-            SHARED_WORKFLOWS="$HOME/.gemini/workflows"
             ;;
         opencode)
             BASE_DIR="$HOME/.config/opencode"
@@ -100,23 +89,15 @@ mkdir -p "$BASE_DIR"
 if [ -n "$TARGET_SKILLS" ]; then
     mkdir -p "$TARGET_SKILLS"
 fi
-if [ -n "$TARGET_WORKFLOWS" ]; then
-    mkdir -p "$TARGET_WORKFLOWS"
-fi
 
 if [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity" ]; then
     mkdir -p "$LEGACY_SKILLS"
-    mkdir -p "$LEGACY_WORKFLOWS"
 elif [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity-ide" ]; then
     mkdir -p "$LEGACY_SKILLS"
-    mkdir -p "$LEGACY_WORKFLOWS"
     mkdir -p "$DIRECT_WORKSPACE_SKILLS" 2>/dev/null || true
-    mkdir -p "$DIRECT_WORKSPACE_WORKFLOWS" 2>/dev/null || true
 elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
     mkdir -p "$SHARED_SKILLS" 2>/dev/null || true
-    mkdir -p "$SHARED_WORKFLOWS" 2>/dev/null || true
     mkdir -p "$DIRECT_GLOBAL_SKILLS" 2>/dev/null || true
-    mkdir -p "$DIRECT_GLOBAL_WORKFLOWS" 2>/dev/null || true
 fi
 
 # Install Skills
@@ -144,24 +125,6 @@ elif [ -n "$TARGET_SKILLS" ]; then
     echo "[Info] No ./skills directory found."
 fi
 
-# Install Workflows
-if [ -n "$TARGET_WORKFLOWS" ] && [ -d "workflows" ]; then
-    echo "[Packaging] Copying workflows from ./workflows to $TARGET_WORKFLOWS..."
-    cp -r workflows/* "$TARGET_WORKFLOWS/" 2>/dev/null || true
-    if [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity" ]; then
-        cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
-    elif [ "$SCOPE" = "workspace" ] && [ "$AGENT" = "antigravity-ide" ]; then
-        cp -r workflows/* "$LEGACY_WORKFLOWS/" 2>/dev/null || true
-        cp -r workflows/* "$DIRECT_WORKSPACE_WORKFLOWS/" 2>/dev/null || true
-    elif [ "$SCOPE" = "global" ] && { [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; }; then
-        cp -r workflows/* "$SHARED_WORKFLOWS/" 2>/dev/null || true
-        cp -r workflows/* "$DIRECT_GLOBAL_WORKFLOWS/" 2>/dev/null || true
-    fi
-    echo "[OK] Workflows installed."
-elif [ -n "$TARGET_WORKFLOWS" ]; then
-    echo "[Info] No ./workflows directory found."
-fi
-
 # Generate/Copy Plugin Manifests for Antigravity Agents
 if [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; then
     if [ -f "plugin.json" ]; then
@@ -171,7 +134,7 @@ if [ "$AGENT" = "antigravity" ] || [ "$AGENT" = "antigravity-ide" ]; then
 {
   "name": "$PLUGIN_NAME",
   "version": "2.0.0",
-  "description": "Centralized skills and workflows for Antigravity"
+  "description": "Centralized skills for Antigravity"
 }
 EOF
     fi
