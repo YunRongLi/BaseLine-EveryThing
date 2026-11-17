@@ -94,6 +94,8 @@ python scripts/ado.py pr --list
 ```
 
 ### Step 2: Inspect PR Summary and Review Threads
+When asked to read active comments on a PR, read all active comments including automated/agent comments by default. Do **not** pass `--human` unless the user explicitly asks to filter to human comments only.
+
 ```bash
 # View full PR summary (description, reviewers/votes, changed files, commits, threads)
 python scripts/ado.py pr <pr_id>
