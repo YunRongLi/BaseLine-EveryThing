@@ -445,6 +445,70 @@ class PullRequestService:
         finally:
             self.client.project = original_project
 
+    def create_thread(
+        self,
+        pr_id: int,
+        comment_text: str,
+        repository_id: Optional[str] = None,
+        status: str = "active",
+        file_path: Optional[str] = None,
+        line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        side: str = "right",
+        project: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Creates a new PR comment thread, optionally anchored to a file and line range.
+        """
+        if side not in ("right", "left"):
+            raise ValueError(f"Invalid side '{side}'. Must be 'right' or 'left'.")
+        if line is not None and not file_path:
+            raise ValueError("file_path is required when line is specified.")
+        if end_line is not None and line is None:
+            raise ValueError("line is required when end_line is specified.")
+        if line is not None and line < 1:
+            raise ValueError("line must be >= 1.")
+        if end_line is not None and end_line < line:
+            raise ValueError("end_line must be >= line.")
+
+        repo = repository_id or self.repository_id
+        if not repo:
+            pr = self.get_pull_request(pr_id, project=project)
+            repo = pr.repository_id
+            project = project or pr.project_name
+
+        original_project = self.client.project
+        if project:
+            self.client.project = project
+
+        try:
+            endpoint = f"git/repositories/{repo}/pullrequests/{pr_id}/threads"
+            payload: Dict[str, Any] = {
+                "comments": [
+                    {
+                        "parentCommentId": 0,
+                        "content": comment_text,
+                        "commentType": 1,
+                    }
+                ],
+                "status": status,
+            }
+
+            if file_path:
+                normalized_path = file_path if file_path.startswith("/") else f"/{file_path}"
+                thread_context: Dict[str, Any] = {"filePath": normalized_path}
+                if line is not None:
+                    start_key = "rightFileStart" if side == "right" else "leftFileStart"
+                    end_key = "rightFileEnd" if side == "right" else "leftFileEnd"
+                    effective_end = end_line if end_line is not None else line
+                    thread_context[start_key] = {"line": line, "offset": 1}
+                    thread_context[end_key] = {"line": effective_end, "offset": 2147483647}
+                payload["threadContext"] = thread_context
+
+            return self.client.post(endpoint, json_data=payload, scoped_to_project=bool(self.client.project))
+        finally:
+            self.client.project = original_project
+
     def reply_to_thread(
         self,
         pr_id: int,

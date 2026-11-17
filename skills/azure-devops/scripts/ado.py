@@ -230,6 +230,57 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
         except Exception as e:
             print(f"Error submitting review vote: {str(e)}", file=sys.stderr)
             return 1
+        if (
+            not getattr(args, "reply", None)
+            and not getattr(args, "comment", None)
+            and not getattr(args, "comment_file", None)
+            and not args.for_agent
+            and not args.json
+        ):
+            return 0
+
+    if getattr(args, "comment", None) or getattr(args, "comment_file", None):
+        if getattr(args, "comment", None) and getattr(args, "comment_file", None):
+            print("Error: --comment and --comment-file are mutually exclusive.", file=sys.stderr)
+            return 1
+        if getattr(args, "thread", None):
+            print("Error: --thread cannot be used when creating a new comment thread (use --reply instead).", file=sys.stderr)
+            return 1
+
+        comment_text = getattr(args, "comment", None)
+        comment_file = getattr(args, "comment_file", None)
+        if comment_file:
+            try:
+                with open(comment_file, "r", encoding="utf-8") as f:
+                    comment_text = f.read()
+            except OSError as e:
+                print(f"Error reading comment file '{comment_file}': {str(e)}", file=sys.stderr)
+                return 1
+
+        status = getattr(args, "status", None) or "active"
+        try:
+            res = pr_service.create_thread(
+                pr_id=pr.id,
+                comment_text=comment_text,
+                repository_id=pr.repository_id,
+                status=status,
+                file_path=getattr(args, "file", None),
+                line=getattr(args, "line", None),
+                end_line=getattr(args, "end_line", None),
+                side=getattr(args, "side", "right") or "right",
+                project=pr.project_name,
+            )
+            thread_id = res.get("id")
+            location = ""
+            if getattr(args, "file", None):
+                location = f" on {args.file}"
+                if getattr(args, "line", None) is not None:
+                    end_l = getattr(args, "end_line", None)
+                    location += f":{args.line}" if end_l is None or end_l == args.line else f":{args.line}-{end_l}"
+            print(f"Successfully created Thread #{thread_id}{location} on PR #{pr.id}.")
+        except Exception as e:
+            print(f"Error creating review thread: {str(e)}", file=sys.stderr)
+            return 1
         if not getattr(args, "reply", None) and not args.for_agent and not args.json:
             return 0
 
@@ -602,6 +653,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Filter review threads to only automated bot/scanner findings",
     )
+    p_pr.add_argument("--comment", help="Create a new review comment thread on the PR")
+    p_pr.add_argument("--comment-file", help="Read new review comment thread markdown from a UTF-8 file")
+    p_pr.add_argument("--file", help="File path in the PR to anchor the new comment thread (used with --comment/--comment-file)")
+    p_pr.add_argument("--line", type=int, help="Start line number for an inline comment thread (requires --file)")
+    p_pr.add_argument("--end-line", type=int, help="End line number for a multi-line inline comment thread (requires --line)")
+    p_pr.add_argument("--side", choices=["right", "left"], default="right", help="Diff side for inline line comments (default: right)")
     p_pr.add_argument("--reply", help="Post a reply comment to a review thread")
     p_pr.add_argument("--thread", help="Thread ID to reply to")
     p_pr.add_argument("--resolve", action="store_true", help="Mark review thread as resolved/fixed")

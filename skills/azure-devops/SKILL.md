@@ -122,8 +122,14 @@ python scripts/ado.py pr <pr_id> --for-agent
 python scripts/ado.py pr <pr_id> --out ./output/pr_<pr_id>_review.md
 ```
 
-### Step 3: Reply to a Review Comment and Vote
+### Step 3: Post Review Comments, Reply to Threads, and Vote
 ```bash
+# Post a new general PR review comment from a markdown file (safe for multi-line/backticks)
+python scripts/ado.py pr <pr_id> --comment-file <review.md>
+
+# Post a new inline comment anchored to a specific file and line (or line range)
+python scripts/ado.py pr <pr_id> --comment-file <finding.md> --file /path/to/file --line 120 --end-line 135
+
 # Reply to a review thread (auto-resolves repository)
 python scripts/ado.py pr <pr_id> --reply "Addressed in commit abc1234." --thread <thread_id>
 
