@@ -29,7 +29,7 @@ from lib.formatter import (
     WIAgentMarkdownReporter,
     WITerminalFormatter,
 )
-from lib.pull_requests import PullRequestService
+from lib.pull_requests import PR_STATE_VALUES, PullRequestService, parse_iso_datetime
 from lib.work_items import WorkItemService
 
 
@@ -124,6 +124,20 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
     pr_service = PullRequestService(client)
 
     if args.list or not args.pr_id:
+        pr_state = getattr(args, "state", "active") or "active"
+        since = getattr(args, "since", None)
+        until = getattr(args, "until", None)
+        limit = getattr(args, "limit", None)
+
+        try:
+            min_dt = parse_iso_datetime(since, end_of_day=False) if since else None
+            max_dt = parse_iso_datetime(until, end_of_day=True) if until else None
+            if min_dt and max_dt and min_dt > max_dt:
+                raise ValueError("--since must be earlier than or equal to --until.")
+        except ValueError as e:
+            print(f"Error: Invalid date filter: {str(e)}", file=sys.stderr)
+            return 1
+
         author_filter = args.author.strip() if args.author else None
         reviewer_filter = args.reviewer.strip() if getattr(args, "reviewer", None) else None
         creator_id = None
@@ -171,6 +185,10 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
                     project=proj,
                     creator_id=creator_id,
                     reviewer_id=reviewer_id,
+                    status=pr_state,
+                    top=limit,
+                    min_time=since,
+                    max_time=until,
                 )
                 for p in prs:
                     if p.id not in seen_ids:
@@ -188,6 +206,8 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
                 {
                     "id": p.id,
                     "title": p.title,
+                    "status": p.status,
+                    "creation_date": p.creation_date,
                     "author": p.created_by,
                     "project": p.project_name,
                     "repo": p.repository_name,
@@ -206,7 +226,14 @@ def cmd_pr(args: argparse.Namespace, config: ToolConfig) -> int:
                 filter_desc = f"for author '{author_filter}'"
             elif reviewer_filter:
                 filter_desc = f"for reviewer '{reviewer_filter}'"
-            print(PRTerminalFormatter.format_pr_list(all_prs, author_filter=author_filter, filter_desc=filter_desc))
+            print(
+                PRTerminalFormatter.format_pr_list(
+                    all_prs,
+                    author_filter=author_filter,
+                    filter_desc=filter_desc,
+                    state=pr_state,
+                )
+            )
         return 0
 
     # Specific PR inspection
@@ -626,6 +653,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_pr.add_argument("--assigned", action="store_true", help="Filter pull requests where current user is assigned as reviewer")
     p_pr.add_argument("--author", help="Filter pull requests by author name, email, or alias")
     p_pr.add_argument("--reviewer", help="Filter pull requests by reviewer name, email, or alias")
+    p_pr.add_argument(
+        "--state",
+        choices=list(PR_STATE_VALUES),
+        default="active",
+        help="Filter pull requests by lifecycle state (default: active)",
+    )
+    p_pr.add_argument("--since", help="Filter pull requests created on or after date/time (YYYY-MM-DD or ISO-8601)")
+    p_pr.add_argument("--until", help="Filter pull requests created on or before date/time (YYYY-MM-DD or ISO-8601)")
+    p_pr.add_argument("--limit", type=int, help="Maximum number of pull requests to return per project")
     p_pr.add_argument("--project", help="Override Azure DevOps project")
     p_pr.add_argument("--org", help="Override Azure DevOps organization URL")
     p_pr.add_argument("--all", action="store_true", help="Include resolved and closed comment threads")

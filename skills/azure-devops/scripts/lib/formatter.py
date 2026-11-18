@@ -72,22 +72,25 @@ class PRTerminalFormatter:
         pull_requests: List[PullRequest],
         author_filter: Optional[str] = None,
         filter_desc: Optional[str] = None,
+        state: Optional[str] = None,
     ) -> str:
         if not pull_requests:
             desc = filter_desc or (f"for author '{author_filter}'" if author_filter else "")
+            state_label = f"{state} " if state and state != "all" else ""
             if desc:
-                return f"No active pull requests found {desc}."
-            return "No active pull requests found."
+                return f"No {state_label}pull requests found {desc}."
+            return f"No {state_label}pull requests found."
 
         lines = []
-        lines.append(f"{'PR ID':<8} {'Project':<14} {'Repository':<22} {'Branch':<20} {'Author':<20} {'Title'}")
-        lines.append("-" * 110)
+        lines.append(f"{'PR ID':<8} {'State':<10} {'Created':<12} {'Project':<14} {'Repository':<22} {'Branch':<20} {'Author':<20} {'Title'}")
+        lines.append("-" * 130)
         for pr in pull_requests:
             branch_info = f"{pr.source_branch} -> {pr.target_branch}"
             if len(branch_info) > 19:
                 branch_info = branch_info[:16] + "..."
+            created = pr.creation_date[:10] if pr.creation_date else "-"
             lines.append(
-                f"#{pr.id:<7} {pr.project_name:<14} {pr.repository_name:<22} {branch_info:<20} {pr.created_by:<20} {pr.title}"
+                f"#{pr.id:<7} {pr.status:<10} {created:<12} {pr.project_name:<14} {pr.repository_name:<22} {branch_info:<20} {pr.created_by:<20} {pr.title}"
             )
         return "\n".join(lines)
 

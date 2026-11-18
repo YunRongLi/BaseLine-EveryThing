@@ -74,10 +74,16 @@ Profile resolution automatically switches when:
 
 Use this workflow to discover active pull requests and inspect reviewer comments.
 
-### Step 1: Discover Active PRs
+### Step 1: Discover PRs
 ```bash
 # List active PRs created by the user (authored)
 python scripts/ado.py pr --mine
+
+# List completed PRs created by the user since a given date
+python scripts/ado.py pr --mine --state completed --since 2026-10-01
+
+# List all PRs (active, completed, abandoned) created within a date range
+python scripts/ado.py pr --mine --state all --since 2026-10-01 --until 2026-11-18
 
 # List active PRs where the user is assigned as a reviewer
 python scripts/ado.py pr --assigned
@@ -94,8 +100,6 @@ python scripts/ado.py pr --list
 ```
 
 ### Step 2: Inspect PR Summary and Review Threads
-When asked to read active comments on a PR, read all active comments including automated/agent comments by default. Do **not** pass `--human` unless the user explicitly asks to filter to human comments only.
-
 ```bash
 # View full PR summary (description, reviewers/votes, changed files, commits, threads)
 python scripts/ado.py pr <pr_id>

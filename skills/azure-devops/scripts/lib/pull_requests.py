@@ -5,6 +5,7 @@ posting review replies, and formatting PR context for AI agents.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 try:
@@ -13,6 +14,29 @@ try:
 except ImportError:
     from client import AzureDevOpsClient
     from exceptions import AdoError
+
+
+PR_STATE_VALUES = ("active", "completed", "abandoned", "all")
+
+
+def parse_iso_datetime(value: str, end_of_day: bool = False) -> datetime:
+    """Parse YYYY-MM-DD or ISO-8601 timestamp into a timezone-aware UTC datetime."""
+    raw = value.strip()
+    if not raw:
+        raise ValueError("Empty date/time string")
+
+    is_date_only = len(raw) == 10 and raw[4] == "-" and raw[7] == "-"
+    if is_date_only:
+        dt = datetime.strptime(raw, "%Y-%m-%d")
+        if end_of_day:
+            dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        return dt.replace(tzinfo=timezone.utc)
+
+    normalized = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+    dt = datetime.fromisoformat(normalized)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def format_vote(vote: int) -> str:
@@ -220,29 +244,75 @@ class PullRequestService:
         reviewer_id: Optional[str] = None,
         status: str = "active",
         top: Optional[int] = None,
+        min_time: Optional[str] = None,
+        max_time: Optional[str] = None,
     ) -> List[PullRequest]:
         """
-        Lists pull requests filtered by project, status, creator, and/or reviewer.
+        Lists pull requests filtered by project, status, creator, reviewer, and/or creation time range.
         """
+        state = (status or "active").strip().lower()
+        if state not in PR_STATE_VALUES:
+            raise ValueError(f"Invalid PR state '{status}'. Expected one of: {', '.join(PR_STATE_VALUES)}")
+
+        min_dt = parse_iso_datetime(min_time, end_of_day=False) if min_time else None
+        max_dt = parse_iso_datetime(max_time, end_of_day=True) if max_time else None
+        if min_dt and max_dt and min_dt > max_dt:
+            raise ValueError("Invalid date range: 'since' must be earlier than or equal to 'until'.")
+
         endpoint = "git/pullrequests"
-        params: Dict[str, Any] = {"searchCriteria.status": status}
+        base_params: Dict[str, Any] = {"searchCriteria.status": state}
         if creator_id:
-            params["searchCriteria.creatorId"] = creator_id
+            base_params["searchCriteria.creatorId"] = creator_id
         if reviewer_id:
-            params["searchCriteria.reviewerId"] = reviewer_id
-        if top:
-            params["$top"] = top
+            base_params["searchCriteria.reviewerId"] = reviewer_id
+        if min_dt:
+            base_params["searchCriteria.minTime"] = min_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if max_dt:
+            base_params["searchCriteria.maxTime"] = max_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if min_dt or max_dt:
+            base_params["searchCriteria.queryTimeRangeType"] = "created"
+
+        page_size = min(top, 100) if (top is not None and top > 0) else 100
+        results: List[PullRequest] = []
+        skip = 0
 
         original_project = self.client.project
         self.client.project = project
         try:
             scoped = bool(self.client.project)
-            data = self.client.get(endpoint, scoped_to_project=scoped, params=params)
+            while True:
+                params = dict(base_params)
+                params["$top"] = page_size
+                params["$skip"] = skip
+                data = self.client.get(endpoint, scoped_to_project=scoped, params=params)
+                raw_list = data.get("value", []) if isinstance(data, dict) else []
+                if not raw_list:
+                    break
+
+                for item in raw_list:
+                    pr = self._parse_pull_request(item)
+                    if (min_dt or max_dt) and pr.creation_date:
+                        try:
+                            created_dt = parse_iso_datetime(pr.creation_date)
+                            if min_dt and created_dt < min_dt:
+                                continue
+                            if max_dt and created_dt > max_dt:
+                                continue
+                        except ValueError:
+                            pass
+                    results.append(pr)
+                    if top is not None and len(results) >= top:
+                        return results[:top]
+
+                if len(raw_list) < page_size:
+                    break
+                skip += len(raw_list)
+                if skip >= 10000:
+                    break
         finally:
             self.client.project = original_project
 
-        raw_list = data.get("value", []) if isinstance(data, dict) else []
-        return [self._parse_pull_request(item) for item in raw_list]
+        return results
 
     def get_threads(
         self,
